@@ -4,6 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ZetaDAO Community Portal</title>
+  
+  <!-- Open Graph Meta Tags for WeChat Sharing -->
+  <meta property="og:title" content="ZetaDAO社区门户 - 探索跨链创新">
+  <meta property="og:description" content="ZetaChain以原生跨链I/O统一逻辑，直连BTC等多链，开发更简单、安全高效更省心。">
+  <meta property="og:image" content="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI2MzAiIHZpZXdCb3g9IjAgMCAxMjAwIDYzMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNjMwIiBmaWxsPSJ1cmwoI2dyYWRpZW50KSIvPgo8ZGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudCIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPgo8c3RvcCBzdG9wLWNvbG9yPSIjZjhmZmZlIi8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2YwZmRmYSIvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+Cjx0ZXh0IHg9IjYwMCIgeT0iMzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMDBkNGFhIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNjAiIGZvbnQtd2VpZ2h0PSJib2xkIj5aZXRhREFP8J+AgTwvdGV4dD4KPHRleHQgeD0iNjAwIiB5PSIzODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM2NjY2NjYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCI+WmV0YUNoYWlu5Lit5paH5qCH6K6wPC90ZXh0Pgo8L3N2Zz4K">
+  <meta property="og:url" content="">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="ZetaDAO社区门户">
+  
+  <!-- WeChat specific meta tags -->
+  <meta name="description" content="ZetaChain以原生跨链I/O统一逻辑，直连BTC等多链，开发更简单、安全高效更省心。">
+  <meta name="keywords" content="ZetaChain,跨链,区块链,Web3,DeFi">
+  
+  <!-- Global WeChat Share Meta Tags -->
+  <meta name="weixin:title" content="ZetaDAO社区门户 - 探索跨链创新">
+  <meta name="weixin:description" content="ZetaChain以原生跨链I/O统一逻辑，直连BTC等多链，开发更简单、安全高效更省心。">
+  <meta name="weixin:image" content="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI2MzAiIHZpZXdCb3g9IjAgMCAxMjAwIDYzMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNjMwIiBmaWxsPSJ1cmwoI2dyYWRpZW50KSIvPgo8ZGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudCIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjEiPgo8c3RvcCBzdG9wLWNvbG9yPSIjZjhmZmZlIi8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iI2YwZmRmYSIvPgo8L2xpbmVhckdyYWRpZW50Pgo8L2RlZnM+Cjx0ZXh0IHg9IjYwMCIgeT0iMzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMDBkNGFhIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNjAiIGZvbnQtd2VpZ2h0PSJib2xkIj5aZXRhREFP8J+AgTwvdGV4dD4KPHRleHQgeD0iNjAwIiB5PSIzODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM2NjY2NjYiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyNCI+WmV0YUNoYWlu5Lit5paH5qCH6K6wPC90ZXh0Pgo8L3N2Zz4K">
   <!--
     This single‑file application serves as the front‑end for the ZetaDAO community.
     It uses a minimal amount of JavaScript to keep things simple and easy to update.
@@ -2031,6 +2048,48 @@
       transition: all 0.3s ease;
     }
 
+    /* Global WeChat Share Button */
+    .wechat-share-btn {
+      background: var(--accent-gradient);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 25px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 15px;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9em;
+      box-shadow: 0 2px 10px rgba(0, 212, 170, 0.2);
+    }
+
+    .wechat-share-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3);
+    }
+
+    .wechat-share-btn .share-icon {
+      font-size: 1.1em;
+    }
+
+    .wechat-share-btn .share-text {
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .wechat-share-btn .share-text {
+        display: none;
+      }
+      
+      .wechat-share-btn {
+        padding: 10px 15px;
+        margin-right: 10px;
+      }
+    }
+
     /* Responsive Design */
     @media (max-width: 1200px) {
       .hero-section {
@@ -2162,6 +2221,10 @@
           <div class="header-title">ZetaDAO 社区门户</div>
         </div>
         <div class="header-right">
+          <button id="globalWeChatShare" class="wechat-share-btn" title="微信分享">
+            <span class="share-icon">📱</span>
+            <span class="share-text">分享</span>
+          </button>
           <button id="connectButton">连接钱包</button>
         </div>
       </div>
@@ -2508,6 +2571,9 @@ contract CrossChainToken {
           sec.classList.remove('active');
         }
       });
+      
+      // Update meta tags for WeChat sharing when section changes
+      updateMetaTagsForSection(id);
     }
 
     // Connect to MetaMask wallet
@@ -2688,31 +2754,14 @@ contract CrossChainToken {
     }
 
     function copyWeChatContent() {
-      const wechatContent = `为什么我越来越看好 ZetaChain @zetablockchain？
+      // 创建文章专用链接
+      const articleUrl = `${window.location.origin}${window.location.pathname}?article=zetachain-outlook`;
+      
+      const wechatContent = `为什么我越来越看好 ZetaChain？
 
-"对普通用户来说，ZetaChain 的意义是把'跨链'变简单：一个入口搞定多链，不必切网络、不用绕桥，误操作风险更低；还能直接用 BTC 做更多事。安全、省心、少坑位，这才是多链时代该有的体验。"
+ZetaChain以原生跨链I/O统一逻辑，直连BTC等多链，开发更简单、安全高效更省心。
 
-从融资和用户背景来看：熊市拿到高质量 2700 万美金融资＋真实用户牵引（500万+注册、260+生态）→ 资本、流动性与渠道资源齐备。
-
-从技术来看，其'单一逻辑+原生跨链 I/O'把跨链复杂度下沉到底层，是多链互操作的正确抽象。它把"跨链"做成了区块链的原生能力，借助 zEVM（EVM 兼容）与去中心化观察者，合约可直接对以太坊、Solana，甚至比特币这类非智能合约链发起调用与交易。
-
-我喜欢的技术点：
-• zEVM：合约具备"跨链 I/O"，能生成并发送外链交易，跨链不再依赖脆弱桥
-• 观察者机制：验证节点监听外链事件，驱动跨链执行，提升可审计性与安全性
-• 底层栈：Cosmos SDK + Tendermint（PBFT）+ PoS，提供快速确定性最终性
-• "链中链/BOB"架构：把多链像拼图纳入同一生态，资源与激励协同
-
-对比以太坊的优势：
-• 单地部署、单一状态：免去多链多处升级与状态漂移
-• 原生跨链执行：无需自建复杂消息通道或依赖第三方跨链桥
-• 非 EVM 友好：可直接触达 BTC 等非合约链
-• 体验更顺滑：基于 Tendermint 的快速最终性
-
-作为既做产品又写合约的用户，我选择 ZetaChain 的理由很朴素：我想把时间花在业务，而不是在多链部署、桥接风险与状态同步上反复救火。
-
-#ZetaChain #跨链 #区块链 #Web3
-
-🔗 阅读原文：${window.location.href}`;
+🔗 ${articleUrl}`;
 
       // Copy to clipboard
       navigator.clipboard.writeText(wechatContent).then(() => {
@@ -2730,7 +2779,7 @@ contract CrossChainToken {
         }, 2000);
         
         // Show detailed success message
-        alert('✅ 内容已复制到剪贴板！\n\n现在你可以：\n1. 打开微信\n2. 粘贴到聊天框\n3. 微信会自动识别并显示为链接卡片\n\n让更多朋友了解ZetaChain的价值！');
+        alert('✅ 分享链接已复制到剪贴板！\n\n现在你可以：\n1. 打开微信\n2. 粘贴到聊天框\n3. 微信会自动显示为卡片形式\n4. 朋友点击可直达文章页面\n\n让更多朋友了解ZetaChain的价值！');
       }).catch(() => {
         // Fallback for older browsers
         const textArea = document.createElement('textarea');
@@ -2739,13 +2788,210 @@ contract CrossChainToken {
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        alert('✅ 内容已复制到剪贴板！\n\n现在你可以：\n1. 打开微信\n2. 粘贴到聊天框\n3. 微信会自动识别并显示为链接卡片\n\n让更多朋友了解ZetaChain的价值！');
+        alert('✅ 分享链接已复制到剪贴板！\n\n现在你可以：\n1. 打开微信\n2. 粘贴到聊天框\n3. 微信会自动显示为卡片形式\n4. 朋友点击可直达文章页面\n\n让更多朋友了解ZetaChain的价值！');
       });
     }
 
     // Make functions globally available
     window.generateWeChatShareCard = generateWeChatShareCard;
     window.copyWeChatContent = copyWeChatContent;
+
+    // Global WeChat Share Function
+    function setupGlobalWeChatShare() {
+      const shareButton = document.getElementById('globalWeChatShare');
+      if (!shareButton) return;
+
+      shareButton.addEventListener('click', () => {
+        // Get current page info
+        const currentUrl = window.location.href;
+        const pageTitle = document.title;
+        
+        // Determine content type and description based on current section
+        let contentTitle = 'ZetaDAO社区门户';
+        let contentDescription = '探索跨链创新，连接开发者，成为区块链互操作性未来的参与者。';
+        
+        // Check if we're on a specific article
+        const urlParams = new URLSearchParams(window.location.search);
+        const articleParam = urlParams.get('article');
+        
+        if (articleParam === 'zetachain-outlook') {
+          contentTitle = '为什么我越来越看好 ZetaChain？';
+          contentDescription = 'ZetaChain以原生跨链I/O统一逻辑，直连BTC等多链，开发更简单、安全高效更省心。';
+        } else {
+          // Check current active section
+          const activeSection = document.querySelector('.nav-link.active, a.active');
+          if (activeSection) {
+            const sectionText = activeSection.textContent.trim();
+            switch(sectionText) {
+              case '研究':
+                contentTitle = 'ZetaChain精选研究内容';
+                contentDescription = '深度分析ZetaChain技术优势和发展前景，了解跨链生态的最新进展。';
+                break;
+              case '会议':
+                contentTitle = 'ZetaChain技术会议回放';
+                contentDescription = '观看ZetaChain技术研讨会和社区活动，获取第一手技术资讯。';
+                break;
+              case '活动':
+                contentTitle = 'ZetaChain社区活动';
+                contentDescription = '参与Gluck抽卡乐等精彩活动，赢取丰厚奖励，体验ZetaChain生态。';
+                break;
+              case '大使':
+                contentTitle = 'ZetaChain社区大使';
+                contentDescription = '认识ZetaChain全球社区大使，了解他们的贡献和联系方式。';
+                break;
+              default:
+                contentTitle = 'ZetaDAO社区门户';
+                contentDescription = '探索跨链创新，连接开发者，成为区块链互操作性未来的参与者。';
+            }
+          }
+        }
+
+        // Create share content
+        const shareContent = `${contentTitle}
+
+${contentDescription}
+
+🔗 ${currentUrl}`;
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(shareContent).then(() => {
+          // Show success feedback
+          const originalContent = shareButton.innerHTML;
+          shareButton.innerHTML = '<span class="share-icon">✅</span><span class="share-text">已复制</span>';
+          shareButton.style.background = '#28a745';
+          
+          setTimeout(() => {
+            shareButton.innerHTML = originalContent;
+            shareButton.style.background = '';
+          }, 2000);
+          
+          // Show detailed message
+          alert(`✅ 分享链接已复制到剪贴板！
+
+当前分享内容：${contentTitle}
+
+现在你可以：
+1. 打开微信
+2. 粘贴到聊天框或朋友圈
+3. 微信会自动显示为卡片形式
+4. 朋友点击可直达当前页面
+
+让更多朋友了解ZetaChain生态！`);
+        }).catch(() => {
+          // Fallback for older browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = shareContent;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          
+          alert(`✅ 分享链接已复制到剪贴板！
+
+当前分享内容：${contentTitle}
+
+现在你可以：
+1. 打开微信
+2. 粘贴到聊天框或朋友圈
+3. 微信会自动显示为卡片形式
+4. 朋友点击可直达当前页面
+
+让更多朋友了解ZetaChain生态！`);
+        });
+      });
+    }
+
+    // Function to update Open Graph meta tags for WeChat sharing
+    function updateOpenGraphTags(title, description, url) {
+      // Update og:title
+      let ogTitle = document.querySelector('meta[property="og:title"]');
+      if (!ogTitle) {
+        ogTitle = document.createElement('meta');
+        ogTitle.setAttribute('property', 'og:title');
+        document.head.appendChild(ogTitle);
+      }
+      ogTitle.setAttribute('content', title);
+
+      // Update og:description
+      let ogDescription = document.querySelector('meta[property="og:description"]');
+      if (!ogDescription) {
+        ogDescription = document.createElement('meta');
+        ogDescription.setAttribute('property', 'og:description');
+        document.head.appendChild(ogDescription);
+      }
+      ogDescription.setAttribute('content', description);
+
+      // Update og:url
+      let ogUrl = document.querySelector('meta[property="og:url"]');
+      if (!ogUrl) {
+        ogUrl = document.createElement('meta');
+        ogUrl.setAttribute('property', 'og:url');
+        document.head.appendChild(ogUrl);
+      }
+      ogUrl.setAttribute('content', url || window.location.href);
+
+      // Update page title
+      document.title = title;
+
+      // Update description meta tag
+      let metaDescription = document.querySelector('meta[name="description"]');
+      if (!metaDescription) {
+        metaDescription = document.createElement('meta');
+        metaDescription.setAttribute('name', 'description');
+        document.head.appendChild(metaDescription);
+      }
+      metaDescription.setAttribute('content', description);
+
+      // Update WeChat specific meta tags
+      let weixinTitle = document.querySelector('meta[name="weixin:title"]');
+      if (!weixinTitle) {
+        weixinTitle = document.createElement('meta');
+        weixinTitle.setAttribute('name', 'weixin:title');
+        document.head.appendChild(weixinTitle);
+      }
+      weixinTitle.setAttribute('content', title);
+
+      let weixinDescription = document.querySelector('meta[name="weixin:description"]');
+      if (!weixinDescription) {
+        weixinDescription = document.createElement('meta');
+        weixinDescription.setAttribute('name', 'weixin:description');
+        document.head.appendChild(weixinDescription);
+      }
+      weixinDescription.setAttribute('content', description);
+    }
+
+    // Function to update meta tags based on current section
+    function updateMetaTagsForSection(sectionId) {
+      let title, description;
+      
+      switch(sectionId) {
+        case 'home':
+          title = 'ZetaDAO社区门户 - 探索跨链创新';
+          description = '探索跨链创新，连接开发者，成为区块链互操作性未来的参与者。';
+          break;
+        case 'articles':
+          title = 'ZetaChain精选研究内容 - ZetaDAO社区门户';
+          description = '深度分析ZetaChain技术优势和发展前景，了解跨链生态的最新进展。';
+          break;
+        case 'videos':
+          title = 'ZetaChain技术会议回放 - ZetaDAO社区门户';
+          description = '观看ZetaChain技术研讨会和社区活动，获取第一手技术资讯。';
+          break;
+        case 'games':
+          title = 'ZetaChain社区活动 - ZetaDAO社区门户';
+          description = '参与Gluck抽卡乐等精彩活动，赢取丰厚奖励，体验ZetaChain生态。';
+          break;
+        case 'ambassadors':
+          title = 'ZetaChain社区大使 - ZetaDAO社区门户';
+          description = '认识ZetaChain全球社区大使，了解他们的贡献和联系方式。';
+          break;
+        default:
+          title = 'ZetaDAO社区门户 - 探索跨链创新';
+          description = '探索跨链创新，连接开发者，成为区块链互操作性未来的参与者。';
+      }
+      
+      updateOpenGraphTags(title, description, window.location.href);
+    }
 
     // Share activity functionality
     function shareActivity(activityId) {
@@ -3524,7 +3770,31 @@ contract CrossChainToken {
       setupNavigation();
       setupArticleDetails();
       setupActivityDetails();
+      setupGlobalWeChatShare();
       addStaggeredAnimation();
+      
+      // Check URL parameters for article sharing
+      const urlParams = new URLSearchParams(window.location.search);
+      const articleParam = urlParams.get('article');
+      
+      if (articleParam === 'zetachain-outlook') {
+        // Update Open Graph tags for ZetaChain article
+        updateOpenGraphTags(
+          '为什么我越来越看好 ZetaChain？ - ZetaDAO社区门户',
+          'ZetaChain以原生跨链I/O统一逻辑，直连BTC等多链，开发更简单、安全高效更省心。把跨链下沉到合约层与共识层，用"单一逻辑 + 原生跨链 I/O"抽象多链。',
+          window.location.href
+        );
+        
+        // Show the article directly
+        setTimeout(() => {
+          showSection('articles');
+          // Trigger article display
+          const articleCard = document.querySelector('[data-article="zetachain-outlook"]');
+          if (articleCard) {
+            articleCard.click();
+          }
+        }, 100);
+      }
       
       // Initialize ambassador grid by default
       setTimeout(() => {
