@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ZetaDAO Community Portal</title>
   
   <!-- Open Graph Meta Tags for WeChat Sharing -->
@@ -64,6 +64,10 @@
       color: var(--text-color);
       overflow-x: hidden;
       position: relative;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
     }
 
     body {
@@ -521,6 +525,9 @@
     section {
       display: none; /* hide all by default */
       animation: slideInUp 0.6s var(--transition-bounce);
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
     }
 
     section.active {
@@ -866,6 +873,10 @@
       flex: 1;
       max-width: 800px;
       width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
     }
 
     .hero-news {
@@ -910,7 +921,9 @@
     .hero-search {
       display: flex;
       justify-content: center;
+      align-items: center;
       margin-top: 40px;
+      width: 100%;
     }
 
     .search-container {
@@ -1368,8 +1381,8 @@
     .read-more-btn {
       color: var(--accent-color);
       text-decoration: none;
-      font-weight: 600;
-      font-size: 0.95em;
+      font-weight: normal;
+      font-size: 0.9em;
       padding: 8px 16px;
       border: 2px solid var(--accent-color);
       border-radius: 20px;
@@ -2098,12 +2111,83 @@
       }
     }
 
+    /* Mobile optimizations */
+    * {
+      -webkit-tap-highlight-color: rgba(0, 212, 170, 0.2);
+      -webkit-touch-callout: none;
+    }
+
+    button, a, .card, .ambassador-card {
+      -webkit-tap-highlight-color: rgba(0, 212, 170, 0.2);
+      touch-action: manipulation;
+    }
+
+    /* Prevent text selection on UI elements */
+    .mobile-menu-btn,
+    .nav-icon,
+    .nav-text,
+    .header-title,
+    .wechat-share-btn,
+    #connectButton {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    /* Mobile Menu Button */
+    .mobile-menu-btn {
+      display: none;
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: var(--text-color);
+      cursor: pointer;
+      padding: 12px;
+      border-radius: 8px;
+      transition: all var(--transition-speed);
+      min-width: 44px;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .mobile-menu-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent-color);
+    }
+
+    .mobile-menu-btn:active {
+      transform: scale(0.95);
+      background: var(--accent-color);
+      color: white;
+    }
+
+    /* Mobile Overlay */
+    .mobile-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      transition: opacity var(--transition-speed);
+    }
+
+    .mobile-overlay.active {
+      opacity: 1;
+    }
+
     /* Responsive Design */
     @media (max-width: 1200px) {
       .hero-section {
         flex-direction: column;
         text-align: center;
         gap: 40px;
+        padding: 40px 20px;
       }
       
       .hero-visual {
@@ -2117,46 +2201,103 @@
       .featured-card.large {
         grid-column: span 2;
       }
+
+      .hero-search-input {
+        min-width: 300px;
+      }
+
+      #content {
+        padding: 20px;
+      }
     }
 
     @media (max-width: 768px) {
       :root {
-        --sidebar-width: 100%;
+        --sidebar-width: 280px;
         --sidebar-collapsed-width: 0px;
+        --header-height: 60px;
+      }
+      
+      .mobile-menu-btn {
+        display: flex;
+      }
+
+      .mobile-overlay {
+        display: block;
       }
       
       #sidebar {
         position: fixed;
-        left: -100%;
+        left: -280px;
         z-index: 1000;
         height: 100vh;
+        width: 280px;
         transition: left var(--transition-speed) var(--transition-bounce);
       }
       
-      #sidebar.collapsed {
+      #sidebar.show {
         left: 0;
-        width: 100%;
       }
       
-      #main.sidebar-collapsed {
+      #main {
         margin-left: 0;
       }
       
-      .hero-title {
-        font-size: 2.5em;
+      header {
+        padding: 0 15px;
+        height: var(--header-height);
       }
-      
-      .hero-actions {
+
+      .header-content {
+        gap: 10px;
+      }
+
+      .header-title {
+        font-size: 1.2em;
+      }
+
+      .hero-section {
+        padding: 30px 15px;
+        gap: 30px;
+        text-align: center;
+        display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
+      }
+      
+      .hero-title {
+        font-size: 2.2em;
+        line-height: 1.2;
+      }
+
+      .hero-subtitle {
+        font-size: 1.2em;
+      }
+
+      .hero-description {
+        font-size: 1em;
+      }
+      
+      .hero-search-input {
+        min-width: 280px;
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+
+      .search-container {
+        max-width: 100%;
+        margin: 0 auto;
       }
       
       .stats-section {
         grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        margin-bottom: 60px;
       }
       
       .featured-grid {
         grid-template-columns: 1fr;
+        gap: 20px;
       }
       
       .featured-card.large {
@@ -2165,20 +2306,120 @@
       
       .card-list {
         flex-direction: column;
+        gap: 20px;
       }
       
       .card {
         max-width: 100%;
+        min-width: unset;
+        flex: none;
+      }
+
+      .ambassador-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-content {
+        width: 95%;
+        margin: 2% auto;
+        max-height: 90vh;
+      }
+
+      #articleContent,
+      .activity-detail {
+        padding: 20px;
+      }
+
+      .article-detail h1 {
+        font-size: 1.8em;
+      }
+
+      #content {
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .section-title {
+        font-size: 1.6em;
+        text-align: center;
+        width: 100%;
+      }
+
+      section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      section.active {
+        display: flex;
+      }
+
+      /* Touch-friendly buttons */
+      .card a,
+      .activity-btn,
+      .read-more-btn,
+      .share-btn,
+      .cta-button {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* News ticker adjustments */
+      #newsContainer {
+        font-size: 0.8em;
+        height: 40px;
       }
     }
 
     @media (max-width: 480px) {
+      :root {
+        --sidebar-width: 100%;
+      }
+
+      #sidebar {
+        width: 100%;
+        left: -100%;
+      }
+      
       .hero-title {
-        font-size: 2em;
+        font-size: 1.8em;
+      }
+
+      .hero-subtitle {
+        font-size: 1.1em;
+      }
+
+      .hero-search-input {
+        min-width: 250px;
+        padding: 12px 20px;
+      }
+
+      .search-button {
+        padding: 12px 16px;
       }
       
       .stats-section {
         grid-template-columns: 1fr;
+        gap: 15px;
+      }
+
+      .stat-card {
+        padding: 20px;
+      }
+
+      .stat-number {
+        font-size: 2em;
       }
       
       .floating-card {
@@ -2189,6 +2430,92 @@
       
       .hero-visual {
         height: auto;
+      }
+
+      .hero-section {
+        padding: 20px 10px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #content {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .card {
+        padding: 20px;
+      }
+
+      .ambassador-card {
+        padding: 20px;
+      }
+
+      .modal-content {
+        width: 98%;
+        margin: 1% auto;
+        border-radius: 12px;
+      }
+
+      #articleContent,
+      .activity-detail {
+        padding: 15px;
+      }
+
+      .article-detail h1 {
+        font-size: 1.5em;
+      }
+
+      .section-title {
+        font-size: 1.4em;
+        text-align: center;
+        width: 100%;
+      }
+
+      /* Smaller buttons for very small screens */
+      .header-right {
+        gap: 8px;
+      }
+
+      .wechat-share-btn,
+      #connectButton {
+        padding: 8px 12px;
+        font-size: 0.85em;
+      }
+
+      /* Adjust news ticker for small screens */
+      #newsContainer {
+        font-size: 0.75em;
+        height: 35px;
+      }
+    }
+
+    /* Landscape phone adjustments */
+    @media (max-width: 768px) and (orientation: landscape) {
+      .hero-section {
+        padding: 20px 15px;
+      }
+
+      .hero-title {
+        font-size: 2em;
+      }
+
+      .modal-content {
+        max-height: 85vh;
+      }
+    }
+
+    /* High DPI screens */
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+      .card,
+      .ambassador-card,
+      .stat-card {
+        border-width: 0.5px;
       }
     }
   </style>
@@ -2225,6 +2552,7 @@
     <header>
       <div class="header-content">
         <div class="header-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
           <div class="header-title">ZetaDAO 社区门户</div>
         </div>
         <div class="header-right">
@@ -2313,6 +2641,9 @@
       </section>
     </div>
   </div>
+
+  <!-- Mobile Overlay -->
+  <div class="mobile-overlay" id="mobileOverlay"></div>
 
   <!-- Article Detail Modal -->
   <div id="articleModal" class="modal">
@@ -2558,6 +2889,9 @@ contract CrossChainToken {
           links.forEach(l => l.classList.remove('active'));
           link.classList.add('active');
           
+          // Close mobile menu after navigation
+          closeMobileMenu();
+          
           // Initialize ambassador grid when ambassadors section is shown
           if (target === 'ambassadors') {
             setTimeout(() => {
@@ -2567,6 +2901,107 @@ contract CrossChainToken {
           }
         });
       });
+    }
+
+    // Mobile menu functionality
+    function setupMobileMenu() {
+      const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+      const sidebar = document.getElementById('sidebar');
+      const mobileOverlay = document.getElementById('mobileOverlay');
+      
+      if (!mobileMenuBtn || !sidebar || !mobileOverlay) return;
+
+      // Toggle mobile menu
+      mobileMenuBtn.addEventListener('click', () => {
+        toggleMobileMenu();
+      });
+
+      // Close menu when clicking overlay
+      mobileOverlay.addEventListener('click', () => {
+        closeMobileMenu();
+      });
+
+      // Close menu on escape key
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeMobileMenu();
+        }
+      });
+
+      // Handle touch events for better mobile experience
+      let touchStartX = 0;
+      let touchEndX = 0;
+
+      // Swipe to close menu
+      sidebar.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      }, { passive: true });
+
+      sidebar.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+      }, { passive: true });
+
+      function handleSwipe() {
+        const swipeThreshold = 50;
+        const diff = touchStartX - touchEndX;
+        
+        // Swipe left to close menu
+        if (diff > swipeThreshold) {
+          closeMobileMenu();
+        }
+      }
+
+      // Swipe from left edge to open menu
+      document.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        if (touch.clientX < 20 && !sidebar.classList.contains('show')) {
+          touchStartX = touch.screenX;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', (e) => {
+        const touch = e.changedTouches[0];
+        if (touchStartX < 20) {
+          touchEndX = touch.screenX;
+          const diff = touchEndX - touchStartX;
+          
+          // Swipe right from edge to open menu
+          if (diff > 100) {
+            openMobileMenu();
+          }
+        }
+        touchStartX = 0;
+      }, { passive: true });
+    }
+
+    function toggleMobileMenu() {
+      const sidebar = document.getElementById('sidebar');
+      const mobileOverlay = document.getElementById('mobileOverlay');
+      
+      if (sidebar.classList.contains('show')) {
+        closeMobileMenu();
+      } else {
+        openMobileMenu();
+      }
+    }
+
+    function openMobileMenu() {
+      const sidebar = document.getElementById('sidebar');
+      const mobileOverlay = document.getElementById('mobileOverlay');
+      
+      sidebar.classList.add('show');
+      mobileOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    }
+
+    function closeMobileMenu() {
+      const sidebar = document.getElementById('sidebar');
+      const mobileOverlay = document.getElementById('mobileOverlay');
+      
+      sidebar.classList.remove('show');
+      mobileOverlay.classList.remove('active');
+      document.body.style.overflow = ''; // Restore scrolling
     }
 
     function showSection(id) {
@@ -3768,6 +4203,7 @@ ${contentDescription}
       startTypewriterEffect();
       setupGlobalSearch();
       setupNavigation();
+      setupMobileMenu();
       setupArticleDetails();
       setupActivityDetails();
       setupGlobalWeChatShare();
