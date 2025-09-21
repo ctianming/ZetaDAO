@@ -220,7 +220,7 @@
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    #sidebar img {
+    #sidebar .sidebar-logo {
       width: 60px;
       height: 60px;
       border-radius: 50%;
@@ -228,12 +228,20 @@
       transition: all var(--transition-speed) var(--transition-bounce);
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
       border: 3px solid rgba(255, 255, 255, 0.3);
+      background: var(--accent-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 30px;
+      font-weight: bold;
     }
 
-    #sidebar.collapsed img {
+    #sidebar.collapsed .sidebar-logo {
       width: 45px;
       height: 45px;
       margin-bottom: 10px;
+      font-size: 24px;
     }
 
     #sidebar nav {
@@ -2187,8 +2195,8 @@
 </head>
 <body>
   <aside id="sidebar" class="collapsed">
-    <!-- Logo placeholder (will be set dynamically) -->
-    <img id="sidebarLogo" alt="ZetaDAO mascot">
+    <!-- Simple Z logo -->
+    <div class="sidebar-logo">Z</div>
     <h2>ZetaDAO</h2>
     <nav>
       <a href="#" data-section="home" class="active">
@@ -2217,7 +2225,6 @@
     <header>
       <div class="header-content">
         <div class="header-left">
-          <img id="headerLogo" alt="ZetaDAO logo" style="width: 40px; height: 40px; border-radius: 8px; margin-right: 15px;">
           <div class="header-title">ZetaDAO 社区门户</div>
         </div>
         <div class="header-right">
@@ -2591,13 +2598,7 @@ contract CrossChainToken {
       }
     }
 
-    // Assign logos to images
-    function setLogos() {
-      const sidebarLogo = document.getElementById('sidebarLogo');
-      const headerLogo = document.getElementById('headerLogo');
-      if (sidebarLogo) sidebarLogo.src = logoSrc;
-      if (headerLogo) headerLogo.src = logoSrc;
-    }
+    // Logo functions removed - now using simple Z design
 
 
     // Add staggered animation to cards
@@ -3763,7 +3764,6 @@ ${contentDescription}
 
     // Initialize the app
     document.addEventListener('DOMContentLoaded', () => {
-      setLogos();
       startNewsTicker();
       startTypewriterEffect();
       setupGlobalSearch();
