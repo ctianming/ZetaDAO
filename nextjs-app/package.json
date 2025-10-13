@@ -1,0 +1,45 @@
+{
+  "name": "zetadao-portal",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "@rainbow-me/rainbowkit": "^2.1.6",
+    "@supabase/supabase-js": "^2.45.4",
+    "@tanstack/react-query": "^5.56.2",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.9.0",
+    "lucide-react": "^0.447.0",
+    "next": "14.2.15",
+    "next-auth": "^4.24.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.53.0",
+    "tailwind-merge": "^2.5.3",
+    "viem": "^2.21.15",
+    "wagmi": "^2.12.17",
+    "zod": "^3.23.8",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.15",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.6.2"
+  }
+}
