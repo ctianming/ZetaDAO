@@ -8,6 +8,10 @@ import bcrypt from 'bcryptjs'
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
+  pages: {
+  error: '/auth/error',
+  signIn: '/auth/error',
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || '',
