@@ -20,6 +20,7 @@ export default function Header() {
   const [mounted, setMounted] = useState(false)
   const [walletLoginIntent, setWalletLoginIntent] = useState(false)
   const { data: session } = useSession()
+  const isNewWalletUser = (session as any)?.newWalletUser
   const { address, isConnected } = useAccount()
   const { signMessageAsync } = useSignMessage()
   const { openConnectModal } = useConnectModal()
@@ -58,7 +59,15 @@ export default function Header() {
         const signature = await signMessageAsync({ message })
         const res = await signIn('credentials', { address, message, signature, redirect: false })
         if (res?.error) setLoginError('钱包登录失败，请重试')
-        else { setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false }
+        else {
+          setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false
+          // 成功后检查是否未设置用户名，若未设置则跳转到引导页完成设置
+          try {
+            const u = await fetch(`/api/user?wallet=${address}`, { cache: 'no-store' })
+            const j = await u.json()
+            if (!j?.data?.username) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
+          } catch {}
+        }
       } catch (e) {
   const anyErr = e as { code?: number; message?: string }
   const msg = String(anyErr?.message || '')
@@ -92,8 +101,21 @@ export default function Header() {
     { name: '活动', href: '/activities' },
     { name: '大使', href: '/ambassadors' },
     { name: '投稿', href: '/submit' },
-  { name: '个人资料', href: '/profile' },
   ]
+
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const avatarTimer = useRef<number | null>(null)
+  const avatarRef = useRef<HTMLDivElement | null>(null)
+  const userName = session?.user?.name || session?.user?.email || '用户'
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!avatarRef.current) return
+      if (!avatarRef.current.contains(e.target as Node)) setAvatarOpen(false)
+    }
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -124,10 +146,74 @@ export default function Header() {
         {/* User */}
         <div className="flex items-center gap-3 relative">
           {session?.user ? (
-            <>
-              <Link href="/profile" className="text-sm text-gray-700 hover:text-primary-600">{session.user?.name || session.user?.email || '个人资料'}</Link>
-              <button onClick={() => signOut()} className="text-sm text-gray-700 hover:text-primary-600">退出</button>
-            </>
+            <div
+              ref={avatarRef}
+              className="relative"
+              onMouseEnter={() => {
+                if (avatarTimer.current) window.clearTimeout(avatarTimer.current)
+                setAvatarOpen(true)
+              }}
+              onMouseLeave={() => {
+                if (avatarTimer.current) window.clearTimeout(avatarTimer.current)
+                avatarTimer.current = window.setTimeout(() => setAvatarOpen(false), 150)
+              }}
+            >
+              <button
+                onClick={() => setAvatarOpen((o) => !o)}
+                className={`group flex items-center justify-center w-9 h-9 rounded-full border bg-white overflow-hidden transition-transform duration-200 ${avatarOpen ? 'scale-105 shadow-md' : 'hover:scale-105 hover:shadow'} `}
+                aria-haspopup="true"
+                aria-expanded={avatarOpen}
+              >
+                <span className="text-xs font-medium text-gray-700 group-hover:text-primary-600 truncate px-1">
+                  {userName.slice(0,2)}
+                </span>
+              </button>
+              {avatarOpen && (
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border shadow-xl p-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-lg font-bold">
+                      {userName.slice(0,1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold truncate">{userName}</div>
+                      {isNewWalletUser && <div className="text-[10px] text-amber-600 mt-1">首次钱包用户，请完善资料</div>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 text-center mb-4">
+                    <div className="py-2">
+                      <div className="text-base font-semibold">—</div>
+                      <div className="text-[11px] text-gray-500">关注</div>
+                    </div>
+                    <div className="py-2 border-x">
+                      <div className="text-base font-semibold">—</div>
+                      <div className="text-[11px] text-gray-500">粉丝</div>
+                    </div>
+                    <div className="py-2">
+                      <div className="text-base font-semibold">—</div>
+                      <div className="text-[11px] text-gray-500">动态</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Link href="/profile" className="flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
+                      <span>个人中心</span>
+                      <span className="text-xs text-gray-400">→</span>
+                    </Link>
+                    <Link href="/submit" className="flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
+                      <span>投稿管理</span>
+                      <span className="text-xs text-gray-400">→</span>
+                    </Link>
+                    <button onClick={() => signOut()} className="w-full text-left flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
+                      <span>退出登录</span>
+                      <span className="text-xs text-gray-400">↩</span>
+                    </button>
+                  </div>
+                  <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                    <span className="text-xs text-gray-500">主题：浅色</span>
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <button onClick={() => { setLoginError(''); setRegisterSent(false); setRegEmail(''); setAuthTab('signin'); setLoginOpen(true) }} className="text-sm px-3 py-1.5 border rounded-lg hover:bg-gray-50">登录</button>
           )}
@@ -345,7 +431,14 @@ export default function Header() {
                             }
                             const res = await signIn('credentials', { address, message, signature, redirect: false })
                             if (res?.error) setLoginError('钱包登录失败，请重试')
-                            else { setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false }
+                            else {
+                              setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false
+                              try {
+                                const u = await fetch(`/api/user?wallet=${address}`, { cache: 'no-store' })
+                                const j = await u.json()
+                                if (!j?.data?.username) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
+                              } catch {}
+                            }
                           } catch (e) {
                             setLoginError('钱包登录失败，请重试')
                           } finally {
@@ -360,6 +453,9 @@ export default function Header() {
                     </div>
                     <div className="mt-6 text-center">
                       <button onClick={() => { setWalletLoginIntent(false); wcOpenOnce.current = false; setLoginOpen(false) }} className="text-sm text-gray-600 hover:text-gray-800">取消</button>
+                      {isNewWalletUser && (
+                        <div className="mt-3 text-xs text-amber-600">首次使用该钱包？完成连接后将前往个人资料设置用户名。</div>
+                      )}
                     </div>
                   </div>
                 </div>
