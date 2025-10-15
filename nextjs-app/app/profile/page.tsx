@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [pwdCurrent, setPwdCurrent] = useState('')
   const [pwdNew, setPwdNew] = useState('')
   const [pwdMsg, setPwdMsg] = useState('')
+  const [uploading, setUploading] = useState(false)
   const walletAddress = (session as any)?.walletAddress as string | undefined
   const uid = (session as any)?.uid as string | undefined
 
@@ -68,6 +69,50 @@ export default function ProfilePage() {
     else setPwdMsg('密码修改成功')
   }
 
+  async function compressImage(file: File, maxWidth = 512, maxHeight = 512, quality = 0.85): Promise<File> {
+    try {
+      const img = document.createElement('img')
+      const url = URL.createObjectURL(file)
+      await new Promise((res, rej) => {
+        img.onload = () => res(null)
+        img.onerror = rej
+        img.src = url
+      })
+      const canvas = document.createElement('canvas')
+      let { width, height } = img
+      const ratio = Math.min(maxWidth / width, maxHeight / height, 1)
+      width = Math.round(width * ratio)
+      height = Math.round(height * ratio)
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+      const type = file.type === 'image/png' ? 'image/webp' : file.type
+      const blob: Blob = await new Promise((res) => canvas.toBlob(b => res(b!), type, quality))
+      URL.revokeObjectURL(url)
+      return new File([blob], file.name.replace(/\.(png|jpg|jpeg)$/i, '.webp'), { type })
+    } catch {
+      return file
+    }
+  }
+
+  const onUpload = async (file: File) => {
+    setUploading(true)
+    try {
+      // client-side compress to reduce bandwidth
+      file = await compressImage(file, 512, 512, 0.85)
+      const form = new FormData()
+      form.append('file', file)
+      form.append('filename', file.name)
+      const res = await fetch('/api/user/avatar', { method: 'POST', body: form })
+      const j = await res.json()
+      if (!j.success) return alert(j.error || '上传失败')
+      setAvatarUrl(j.url)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -79,9 +124,18 @@ export default function ProfilePage() {
               <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
                 {avatarUrl ? <Image src={avatarUrl} alt="avatar" width={80} height={80} className="object-cover w-full h-full" /> : <span className="text-xs text-gray-400">无头像</span>}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 space-y-2">
                 <label className="block text-sm mb-1">头像 URL</label>
                 <input className="border rounded-lg px-3 py-2 w-full" placeholder="https://..." value={avatarUrl} onChange={e=>setAvatarUrl(e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <label className="text-sm px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="file" accept="image/*" className="hidden" onChange={e=>{
+                      const f = e.target.files?.[0]; if (f) onUpload(f)
+                    }} />
+                    {uploading ? '上传中...' : '选择图片上传'}
+                  </label>
+                  <span className="text-xs text-gray-500">支持 JPG/PNG/WebP，建议 ≤ 1MB</span>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

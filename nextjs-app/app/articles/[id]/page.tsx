@@ -4,6 +4,7 @@ import { PublishedContent } from '@/types'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
 import { mapPublishedRow } from '@/lib/transform'
+import { markdownToHtml } from '@/lib/markdown'
 
 interface PageProps {
   params: {
@@ -84,10 +85,15 @@ export default async function ArticleDetailPage({ params }: PageProps) {
           )}
 
           {/* 文章内容 */}
-          <div
-            className="prose prose-lg max-w-none"
-            dangerouslySetInnerHTML={{ __html: article.content }}
-          />
+          <div className="prose prose-lg max-w-none">
+            {/* 支持 Markdown 渲染（后端存的是 md 或 html 均可）*/}
+            {/* 优先尝试将原文作为 markdown 渲染，若渲染为空则使用原 HTML */}
+            {(() => {
+              const mdHtml = markdownToHtml(article.content || '')
+              const html = mdHtml?.trim() ? mdHtml : (article.content || '')
+              return <div dangerouslySetInnerHTML={{ __html: html }} />
+            })()}
+          </div>
 
           {/* 外部链接 */}
       {article.metadata?.externalLink && (

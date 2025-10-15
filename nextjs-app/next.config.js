@@ -1,6 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  webpack: (config) => {
+    // Silence optional deps that are Node-only or not needed in browser bundles
+    config.resolve = config.resolve || {}
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@react-native-async-storage/async-storage': false,
+      'pino-pretty': false,
+    }
+    return config
+  },
   images: {
     domains: ['localhost', 'vercel.app'],
     remotePatterns: [

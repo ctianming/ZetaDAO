@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/nextauth'
 import { SubmitContentForm } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
     const body: SubmitContentForm & { walletAddress: string } = await request.json()
-    
-  const { walletAddress, title, content, category, tags, imageUrl, videoUrl, externalLink, articleCategory } = body
+    const { walletAddress, title, content, category, tags, imageUrl, videoUrl, externalLink, articleCategory } = body
 
     // 验证必填字段
     if (!walletAddress || !title || !content || !category) {
@@ -16,11 +17,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // 解析 user_uid：优先 session，其次 identities(wallet)
+    let userUid: string | null = null
+    try {
+      const session = await getServerSession(authOptions as any)
+      userUid = (session as any)?.uid || null
+    } catch {}
+    if (!userUid && walletAddress) {
+      const { data: ident } = await supabaseAdmin
+        .from('user_identities')
+        .select('user_uid')
+        .eq('provider', 'wallet')
+        .eq('account_id', walletAddress.toLowerCase())
+        .maybeSingle()
+      userUid = ident?.user_uid || null
+    }
+
     // 插入投稿数据
-  const { data, error } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('submissions')
       .insert({
-        wallet_address: walletAddress,
+        user_uid: userUid,
+        wallet_address: walletAddress, /* legacy, will be cleaned later */
         title,
         content,
         category,
@@ -34,7 +52,7 @@ export async function POST(request: NextRequest) {
           articleCategory: articleCategory || null,
         },
       })
-      .select()
+  .select()
       .single()
 
     if (error) {
@@ -45,10 +63,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 更新用户投稿计数
-  await supabaseAdmin.rpc('increment_user_submissions', {
-      user_wallet: walletAddress,
-    })
+    // 更新用户投稿计数（若解析到了 uid）
+    if (userUid) {
+      await supabaseAdmin.rpc('increment_user_submissions', { user_uid: userUid })
+    }
 
     return NextResponse.json({
       success: true,

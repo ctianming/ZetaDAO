@@ -5,6 +5,8 @@ import { useAccount } from 'wagmi'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { ContentCategory } from '@/types'
+import { useMemo } from 'react'
+import { markdownToHtml } from '@/lib/markdown'
 
 export default function SubmitPage() {
   const { address, isConnected } = useAccount()
@@ -23,6 +25,9 @@ export default function SubmitPage() {
     externalLink: '',
   articleCategory: '',
   })
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  const previewHtml = useMemo(() => markdownToHtml(formData.content || ''), [formData.content])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,6 +84,68 @@ export default function SubmitPage() {
       ...prev,
       [e.target.name]: e.target.value
     }))
+  }
+
+  const insertAtCursor = (text: string) => {
+    const ta = document.querySelector('textarea[name="content"]') as HTMLTextAreaElement | null
+    if (!ta) {
+      setFormData(prev => ({ ...prev, content: (prev.content || '') + text }))
+      return
+    }
+    const start = ta.selectionStart || 0
+    const end = ta.selectionEnd || 0
+    const before = formData.content.slice(0, start)
+    const after = formData.content.slice(end)
+    const next = before + text + after
+    setFormData(prev => ({ ...prev, content: next }))
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.selectionStart = ta.selectionEnd = start + text.length
+    })
+  }
+
+  async function compressImage(file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.86): Promise<File> {
+    try {
+      const img = document.createElement('img')
+      const url = URL.createObjectURL(file)
+      await new Promise((res, rej) => {
+        img.onload = () => res(null)
+        img.onerror = rej
+        img.src = url
+      })
+      const canvas = document.createElement('canvas')
+      let { width, height } = img
+      const ratio = Math.min(maxWidth / width, maxHeight / height, 1)
+      width = Math.round(width * ratio)
+      height = Math.round(height * ratio)
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+      const type = file.type === 'image/png' ? 'image/webp' : file.type
+      const blob: Blob = await new Promise((res) => canvas.toBlob(b => res(b!), type, quality))
+      URL.revokeObjectURL(url)
+      return new File([blob], file.name.replace(/\.(png|jpg|jpeg)$/i, '.webp'), { type })
+    } catch {
+      return file
+    }
+  }
+
+  const uploadImage = async (file: File) => {
+    setUploadingImage(true)
+    try {
+      // compress large images on client before upload
+      file = await compressImage(file)
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/content/image', { method: 'POST', body: form })
+      const j = await res.json()
+      if (!j.success) return alert(j.error || '图片上传失败')
+      // Insert markdown image
+      insertAtCursor(`\n![image](${j.url})\n`)
+    } finally {
+      setUploadingImage(false)
+    }
   }
 
   if (!isConnected) {
@@ -151,14 +218,24 @@ export default function SubmitPage() {
                 name="content"
                 value={formData.content}
                 onChange={handleChange}
-                placeholder="输入详细内容（支持HTML）"
+                placeholder="输入详细内容（支持 Markdown，图片可上传自动插入）"
                 rows={10}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 required
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                支持 HTML 标签，可以包含图片、链接等
-              </p>
+              <div className="flex items-center gap-3 mt-2">
+                <label className="text-sm px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input type="file" accept="image/*" className="hidden" onChange={e=>{ const f=e.target.files?.[0]; if(f) uploadImage(f) }} />
+                  {uploadingImage ? '上传中...' : '上传图片并插入'}
+                </label>
+                <button type="button" className="text-sm px-3 py-2 border rounded-lg hover:bg-gray-50" onClick={() => insertAtCursor('\n**加粗** _斜体_ `代码`\n')}>插入样例格式</button>
+              </div>
+            </div>
+
+            {/* 预览 */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">实时预览</label>
+              <div className="prose max-w-none border rounded-xl p-4" dangerouslySetInnerHTML={{ __html: previewHtml }} />
             </div>
 
             {/* 文章分类（仅文章时显示） */}
