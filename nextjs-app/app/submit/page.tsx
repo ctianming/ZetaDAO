@@ -7,9 +7,11 @@ import Header from '@/components/layout/Header'
 import { ContentCategory } from '@/types'
 import { useMemo } from 'react'
 import { markdownToHtml } from '@/lib/markdown'
+import { useSession } from 'next-auth/react'
 
 export default function SubmitPage() {
   const { address, isConnected } = useAccount()
+  const { data: session, status } = useSession()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -148,7 +150,9 @@ export default function SubmitPage() {
     }
   }
 
-  if (!isConnected) {
+  // Require both wallet connection and authenticated session (uid)
+  const uid = (session as any)?.uid as string | undefined
+  if (!isConnected || !uid) {
     return (
       <div className="min-h-screen">
         <Header />
@@ -156,7 +160,7 @@ export default function SubmitPage() {
           <div className="max-w-2xl mx-auto text-center">
             <h1 className="text-4xl font-bold mb-4">投稿系统</h1>
             <p className="text-muted-foreground mb-8">
-              请先连接钱包以使用投稿功能
+              请先连接钱包并完成登录（右上角“登录”→“使用钱包登录”）。完成签名后若首次使用会进入引导设置用户名。
             </p>
           </div>
         </main>

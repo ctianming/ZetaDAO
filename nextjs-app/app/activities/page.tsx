@@ -8,18 +8,22 @@ import { formatDate } from '@/lib/utils'
 export const revalidate = 60
 
 async function getActivities(): Promise<PublishedContent[]> {
-  const { data, error } = await supabase
-    .from('published_content')
-    .select('*')
-    .eq('category', 'activity')
-    .order('published_at', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from('published_content')
+      .select('*')
+      .eq('category', 'activity')
+      .order('published_at', { ascending: false })
 
-  if (error) {
-    console.error('Error fetching activities:', error)
+    if (error) {
+      console.error('Error fetching activities:', error)
+      return []
+    }
+    return mapPublishedRows(data)
+  } catch (e) {
+    console.error('Error fetching activities:', e)
     return []
   }
-
-  return mapPublishedRows(data)
 }
 
 export default async function ActivitiesPage() {

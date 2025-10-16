@@ -20,6 +20,7 @@ export default function Header() {
   const [mounted, setMounted] = useState(false)
   const [walletLoginIntent, setWalletLoginIntent] = useState(false)
   const { data: session } = useSession()
+  const xpTotal = (session as any)?.xpTotal as number | undefined
   const isNewWalletUser = (session as any)?.newWalletUser
   const { address, isConnected } = useAccount()
   const { signMessageAsync } = useSignMessage()
@@ -61,11 +62,14 @@ export default function Header() {
         if (res?.error) setLoginError('钱包登录失败，请重试')
         else {
           setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false
+          // force refresh session so UI immediately reflects login state
+          try { await fetch('/api/auth/session?update=1', { cache: 'no-store' }) } catch {}
           // 成功后检查是否未设置用户名，若未设置则跳转到引导页完成设置
           try {
             const u = await fetch(`/api/user?wallet=${address}`, { cache: 'no-store' })
             const j = await u.json()
-            if (!j?.data?.username) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
+            const hasUsername = !!j?.data?.user?.username
+            if (!hasUsername) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
           } catch {}
         }
       } catch (e) {
@@ -194,6 +198,29 @@ export default function Header() {
                     </div>
                   </div>
                   <div className="space-y-1">
+                    {typeof xpTotal === 'number' && (
+                      <div className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-amber-50">
+                        <span>我的 XP</span>
+                        <span className="font-semibold text-amber-700">{xpTotal}</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/xp/checkin', { method: 'POST' })
+                          const j = await res.json()
+                          if (j?.success) {
+                            // 触发 session 更新以刷新 xpTotal
+                            await fetch('/api/auth/session?update=1', { cache: 'no-store' })
+                            window.location.reload()
+                          }
+                        } catch {}
+                      }}
+                      className="w-full text-left flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50"
+                    >
+                      <span>每日签到 +5 XP</span>
+                      <span className="text-xs text-gray-400">→</span>
+                    </button>
                     <Link href="/profile" className="flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
                       <span>个人中心</span>
                       <span className="text-xs text-gray-400">→</span>
@@ -250,8 +277,8 @@ export default function Header() {
                         className="space-y-3"
                       >
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">用户名 / 邮箱</label>
-                          <input name="identifier" placeholder="用户名或邮箱" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
+                          <label className="block text-xs text-gray-500 mb-1">邮箱</label>
+                          <input name="identifier" placeholder="邮箱" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                         </div>
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">密码</label>
@@ -271,6 +298,7 @@ export default function Header() {
                             const username = String(fd.get('reg_username') || '')
                             setLoginError('')
                             setLoginLoading(true)
+                            if (!username) { setLoginError('请填写用户名'); setLoginLoading(false); return }
                             const resp = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, username }) })
                             const json = await resp.json()
                             if (!resp.ok || !json.success) {
@@ -284,8 +312,8 @@ export default function Header() {
                           className="space-y-3"
                         >
                           <div>
-                            <label className="block text-xs text-gray-500 mb-1">用户名（可选）</label>
-                            <input name="reg_username" placeholder="用户名（可选）" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
+                            <label className="block text-xs text-gray-500 mb-1">用户名</label>
+                            <input name="reg_username" placeholder="请输入用户名（必填）" required className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                           </div>
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">邮箱</label>
@@ -433,10 +461,12 @@ export default function Header() {
                             if (res?.error) setLoginError('钱包登录失败，请重试')
                             else {
                               setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false
+                              try { await fetch('/api/auth/session?update=1', { cache: 'no-store' }) } catch {}
                               try {
                                 const u = await fetch(`/api/user?wallet=${address}`, { cache: 'no-store' })
                                 const j = await u.json()
-                                if (!j?.data?.username) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
+                                const hasUsername = !!j?.data?.user?.username
+                                if (!hasUsername) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
                               } catch {}
                             }
                           } catch (e) {

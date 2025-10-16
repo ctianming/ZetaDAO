@@ -10,6 +10,7 @@ export interface User {
   createdAt: string
   totalSubmissions: number
   approvedSubmissions: number
+  xpTotal?: number
 }
 
 export interface Submission {
@@ -55,6 +56,20 @@ export interface PublishedContent {
   location?: string
   participants?: number
   }
+}
+
+export type XpEventType = 'checkin' | 'publish' | 'view_threshold' | 'tip_give' | 'tip_receive'
+
+export interface XpEvent {
+  id: string
+  userUid: string
+  type: XpEventType
+  amount: number
+  contentId?: string
+  submissionId?: string
+  milestone?: number
+  metadata?: Record<string, any>
+  createdAt: string
 }
 
 export interface Ambassador {

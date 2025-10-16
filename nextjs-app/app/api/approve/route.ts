@@ -81,6 +81,31 @@ export async function POST(request: NextRequest) {
       user_wallet: submission.wallet_address,
     })
 
+    // 发表奖励 XP：50xp 给作者
+    try {
+      let authorUid: string | null = submission.user_uid || null
+      if (!authorUid && submission.wallet_address) {
+        const { data: ident } = await supabaseAdmin
+          .from('user_identities')
+          .select('user_uid')
+          .eq('provider', 'wallet')
+          .eq('account_id', submission.wallet_address)
+          .maybeSingle()
+        authorUid = ident?.user_uid || null
+      }
+      if (authorUid) {
+        await supabaseAdmin.from('xp_events').insert({
+          user_uid: authorUid,
+          type: 'publish',
+          amount: 50,
+          submission_id: submissionId,
+          metadata: { source: 'approve_api' },
+        })
+      }
+    } catch (e) {
+      console.warn('Failed to award publish XP:', e)
+    }
+
     // 记录审计日志
     await supabaseAdmin
       .from('audit_logs')

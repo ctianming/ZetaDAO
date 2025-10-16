@@ -71,18 +71,18 @@ export const authOptions: NextAuthOptions = {
       id: 'password',
       name: 'password',
       credentials: {
-        identifier: { label: 'Email or Username', type: 'text' },
+        identifier: { label: 'Email', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
         const identifier = credentials?.identifier?.toLowerCase().trim()
         const password = credentials?.password || ''
         if (!identifier || !password) return null
-        // Find by email or username in local auth table
+        // Find by email only in local auth table (usernames may be non-unique)
         const { data: user } = await supabaseAdmin
           .from('auth_local_users')
           .select('*')
-          .or(`email.eq.${identifier},username.eq.${identifier}`)
+          .eq('email', identifier)
           .limit(1)
           .single()
         if (!user || !user.password_hash) return null
@@ -160,6 +160,7 @@ export const authOptions: NextAuthOptions = {
             userUid = existing.user_uid
           } else {
             userUid = await findOrCreateUserIdentity(provider, accountId, profile)
+            ;(token as any).newWalletUser = true
           }
           token.uid = userUid
         }
@@ -181,12 +182,15 @@ export const authOptions: NextAuthOptions = {
         if (token?.uid) {
           const { data } = await supabaseAdmin
             .from('users')
-            .select('username,avatar_url,bio')
+            .select('username,avatar_url,bio,xp_total')
             .eq('uid', token.uid)
             .single()
-          if (data?.username && session.user) session.user.name = data.username
+          // Ensure session.user exists
+          if (!session.user) (session as any).user = { name: undefined, email: undefined }
+          if (data?.username) (session as any).user.name = data.username
           if (data?.avatar_url) (session as any).avatarUrl = data.avatar_url
           if (data?.bio) (session as any).bio = data.bio
+          if (typeof data?.xp_total === 'number') (session as any).xpTotal = data.xp_total
         }
       } catch {}
       return session

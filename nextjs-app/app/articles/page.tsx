@@ -39,10 +39,16 @@ async function getArticles(params: { articleCategory?: string; tag?: string; q?:
 
 export default async function ArticlesPage({ searchParams }: { searchParams?: { articleCategory?: string; tag?: string; q?: string } }) {
   // fetch categories server-side
-  const { data: categories } = await supabase
-    .from('article_categories')
-    .select('slug,name')
-    .order('name', { ascending: true })
+  let categories: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from('article_categories')
+      .select('slug,name')
+      .order('name', { ascending: true })
+    if (!error && data) categories = data as any[]
+  } catch (e) {
+    console.error('Error fetching categories:', e)
+  }
 
   const articles = await getArticles({
     articleCategory: searchParams?.articleCategory,
@@ -64,7 +70,7 @@ export default async function ArticlesPage({ searchParams }: { searchParams?: { 
             initialArticleCategory={searchParams?.articleCategory || ''}
             initialTag={searchParams?.tag || ''}
             initialQ={searchParams?.q || ''}
-            categories={(categories as any[])?.map(c => ({ slug: c.slug, name: c.name })) || []}
+            categories={categories?.map(c => ({ slug: c.slug, name: c.name })) || []}
           />
 
           {articles.length === 0 ? (

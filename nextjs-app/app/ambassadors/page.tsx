@@ -7,18 +7,22 @@ import { mapAmbassadorRows } from '@/lib/transform'
 export const revalidate = 60
 
 async function getAmbassadors(): Promise<Ambassador[]> {
-  const { data, error } = await supabase
-    .from('ambassadors')
-    .select('*')
-    .eq('status', 'active')
-    .order('contributions', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from('ambassadors')
+      .select('*')
+      .eq('status', 'active')
+      .order('contributions', { ascending: false })
 
-  if (error) {
-    console.error('Error fetching ambassadors:', error)
+    if (error) {
+      console.error('Error fetching ambassadors:', error)
+      return []
+    }
+    return mapAmbassadorRows(data)
+  } catch (e) {
+    console.error('Error fetching ambassadors:', e)
     return []
   }
-
-  return mapAmbassadorRows(data)
 }
 
 export default async function AmbassadorsPage() {

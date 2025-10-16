@@ -15,27 +15,23 @@ DROP TABLE IF EXISTS users CASCADE;
 CREATE TABLE users (
   uid UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   wallet_address TEXT UNIQUE,
-  username TEXT UNIQUE,
+  username TEXT,
   avatar_url TEXT,
   bio TEXT,
   role TEXT DEFAULT 'user' CHECK (role IN ('user','admin','ambassador')),
+  xp_total INT DEFAULT 0,
   total_submissions INT DEFAULT 0,
   approved_submissions INT DEFAULT 0,
   twitter TEXT,
   telegram TEXT,
   github TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
-  email TEXT UNIQUE,
-  password_hash TEXT,
-  email_verified_at TIMESTAMPTZ,
-  verification_code TEXT,
-  verification_expires TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_created ON users(created_at DESC);
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_username ON users(username);
 
 -- ===================== USER IDENTITIES =====================
 DROP TABLE IF EXISTS user_identities CASCADE;
@@ -194,7 +190,7 @@ DROP TABLE IF EXISTS auth_local_users CASCADE;
 CREATE TABLE auth_local_users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
-  username TEXT UNIQUE,
+  username TEXT,
   password_hash TEXT NOT NULL,
   email_verified_at TIMESTAMPTZ,
   verification_code TEXT,
@@ -223,6 +219,41 @@ CREATE TRIGGER trg_comments_updated BEFORE UPDATE ON comments FOR EACH ROW EXECU
 CREATE TRIGGER trg_article_categories_updated BEFORE UPDATE ON article_categories FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_auth_local_users_updated BEFORE UPDATE ON auth_local_users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- ===================== XP (POINTS) SYSTEM =====================
+DROP TABLE IF EXISTS xp_events CASCADE;
+CREATE TABLE xp_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('checkin','publish','view_threshold','tip_give','tip_receive')),
+  amount INT NOT NULL CHECK (amount > 0),
+  content_id UUID REFERENCES published_content(id) ON DELETE SET NULL,
+  submission_id UUID REFERENCES submissions(id) ON DELETE SET NULL,
+  milestone INT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- 用于“每日”唯一性与统计的 UTC 日期，避免在索引中使用非 IMMUTABLE 表达式
+  day_utc DATE NOT NULL DEFAULT ((NOW() AT TIME ZONE 'utc')::date)
+);
+CREATE INDEX idx_xp_events_user_created ON xp_events(user_uid, created_at DESC);
+CREATE INDEX idx_xp_events_type ON xp_events(type);
+CREATE INDEX idx_xp_events_content ON xp_events(content_id);
+-- 唯一：每日签到 1 次
+CREATE UNIQUE INDEX uniq_xp_checkin_daily ON xp_events (user_uid, day_utc) WHERE type = 'checkin';
+-- 唯一：同一内容的浏览里程碑仅奖励一次
+CREATE UNIQUE INDEX uniq_xp_view_milestone ON xp_events (user_uid, content_id, milestone) WHERE type = 'view_threshold' AND content_id IS NOT NULL AND milestone IS NOT NULL;
+-- 唯一：同一投稿发布奖励一次
+CREATE UNIQUE INDEX uniq_xp_publish_once ON xp_events (user_uid, submission_id) WHERE type = 'publish' AND submission_id IS NOT NULL;
+
+-- 触发器：插入 xp 事件后累加到 users.xp_total
+CREATE OR REPLACE FUNCTION apply_xp_event()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE users SET xp_total = COALESCE(xp_total,0) + NEW.amount, updated_at = NOW() WHERE uid = NEW.user_uid;
+  RETURN NEW;
+END;$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_apply_xp_event AFTER INSERT ON xp_events FOR EACH ROW EXECUTE FUNCTION apply_xp_event();
+
 -- ===================== FUNCTIONS (stats) =====================
 CREATE OR REPLACE FUNCTION increment_user_submissions(user_uid UUID)
 RETURNS VOID AS $$
@@ -243,6 +274,7 @@ ALTER TABLE published_content ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ambassadors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xp_events ENABLE ROW LEVEL SECURITY;
 
 -- Policies assume JWT claim 'sub' == users.uid
 CREATE POLICY "public_read_users" ON users FOR SELECT USING (true);
@@ -267,6 +299,8 @@ CREATE POLICY "user_manage_own_likes" ON likes FOR ALL USING (user_uid = (curren
 
 CREATE POLICY "public_read_comments" ON comments FOR SELECT USING (status='visible');
 CREATE POLICY "user_manage_own_comments" ON comments FOR ALL USING (user_uid = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid);
+-- XP 事件：用户可读取自己的 XP 记录；禁止直接写入（通过服务端 API 控制）
+CREATE POLICY "select_own_xp_events" ON xp_events FOR SELECT USING (user_uid = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid);
 
 -- ===================== SEED =====================
 INSERT INTO users (wallet_address, username, role) VALUES

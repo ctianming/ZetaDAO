@@ -64,6 +64,15 @@ ADMIN_WALLETS=0x1234...,0x5678...
 # ZetaChain配置
 NEXT_PUBLIC_ZETA_CHAIN_ID=7001
 NEXT_PUBLIC_ZETA_RPC_URL=https://zetachain-athens-evm.blockpi.network/v1/rpc/public
+
+# 腾讯云SES（用于邮箱验证码）
+# 在腾讯云控制台创建并审核通过邮件模板，记录模板ID
+TENCENT_SECRET_ID=your-tencent-secret-id
+TENCENT_SECRET_KEY=your-tencent-secret-key
+TENCENT_SES_REGION=ap-hongkong
+# 必须是已验证的发信地址（或同域名下地址）
+TENCENT_SES_FROM=noreply@yourdomain.com
+TENCENT_SES_TEMPLATE_ID=12345
 ```
 
 ### 3. 设置 Supabase 数据库
@@ -248,7 +257,11 @@ vercel --prod
 
 记得在 Vercel 项目设置中配置环境变量！
 
-## 🔐 安全注意事项
+## � 邮件模板
+
+项目内已包含一个示例邮件模板：`templates/email/verification.html`。可将其上传到腾讯云 SES 的"模板管理"，并在模板中使用变量 `{{appName}}`, `{{code}}`, `{{expireMinutes}}`。上传成功并审核通过后，将模板的数字 ID 配置到 `TENCENT_SES_TEMPLATE_ID`。
+
+## �🔐 安全注意事项
 
 - ✅ 所有 Admin 操作都需要验证钱包地址
 - ✅ 使用 Supabase RLS (Row Level Security)

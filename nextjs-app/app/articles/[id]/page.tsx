@@ -1,5 +1,7 @@
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/db'
+import { revalidatePath } from 'next/cache'
+import ClientActions from './client-actions'
 import { PublishedContent } from '@/types'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
@@ -24,11 +26,8 @@ async function getArticle(id: string): Promise<PublishedContent | null> {
     return null
   }
 
-  // 增加浏览次数
-  await supabase
-    .from('published_content')
-    .update({ views: (data.views || 0) + 1 })
-    .eq('id', id)
+  // 浏览次数通过 API 记录并触发 XP 逻辑
+  // 注意：此处是服务端渲染，改为客户端触发以避免 SSR 时重复计数
 
   return mapPublishedRow(data)
 }
@@ -95,6 +94,9 @@ export default async function ArticleDetailPage({ params }: PageProps) {
             })()}
           </div>
 
+          {/* Tip & View client actions */}
+          <ClientActions contentId={article.id} />
+
           {/* 外部链接 */}
       {article.metadata?.externalLink && (
             <div className="mt-8 p-6 bg-primary-50 rounded-2xl">
@@ -114,3 +116,5 @@ export default async function ArticleDetailPage({ params }: PageProps) {
     </div>
   )
 }
+
+// moved client component to './client-actions' to satisfy Next.js "use client" directive rules
