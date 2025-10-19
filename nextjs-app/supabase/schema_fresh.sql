@@ -99,7 +99,82 @@ CREATE INDEX idx_published_author_uid ON published_content(author_uid);
 CREATE INDEX idx_published_views ON published_content(views DESC);
 CREATE INDEX idx_published_slug ON published_content(slug);
 CREATE INDEX idx_published_article_category ON published_content(article_category);
+-- Social: follows and posts
+DROP TABLE IF EXISTS user_follows CASCADE;
+CREATE TABLE user_follows (
+  follower_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  following_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT chk_follow_not_self CHECK (follower_uid <> following_uid),
+  UNIQUE(follower_uid, following_uid)
+);
+CREATE INDEX idx_user_follows_follower ON user_follows(follower_uid);
+CREATE INDEX idx_user_follows_following ON user_follows(following_uid);
+
+DROP TABLE IF EXISTS user_posts CASCADE;
+CREATE TABLE user_posts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  images JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX idx_user_posts_user ON user_posts(user_uid);
+CREATE INDEX idx_user_posts_created ON user_posts(created_at DESC);
+
+-- Basic RLS (reads public, writes by service/API). Adjust as needed.
+ALTER TABLE user_follows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_posts ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_follows' AND policyname = 'user_follows_read_public'
+  ) THEN
+    CREATE POLICY user_follows_read_public ON user_follows FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_posts' AND policyname = 'user_posts_read_public'
+  ) THEN
+    CREATE POLICY user_posts_read_public ON user_posts FOR SELECT USING (true);
+  END IF;
+END $$;
 CREATE INDEX idx_published_tags_gin ON published_content USING GIN (tags);
+
+-- Social interactions: likes and comments on user_posts
+DROP TABLE IF EXISTS user_post_likes CASCADE;
+CREATE TABLE user_post_likes (
+  user_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES user_posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_uid, post_id)
+);
+CREATE INDEX idx_user_post_likes_post ON user_post_likes(post_id);
+CREATE INDEX idx_user_post_likes_user ON user_post_likes(user_uid);
+
+DROP TABLE IF EXISTS user_post_comments CASCADE;
+CREATE TABLE user_post_comments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  post_id UUID NOT NULL REFERENCES user_posts(id) ON DELETE CASCADE,
+  user_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_user_post_comments_post ON user_post_comments(post_id);
+CREATE INDEX idx_user_post_comments_user ON user_post_comments(user_uid);
+
+ALTER TABLE user_post_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_post_comments ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_post_likes' AND policyname = 'user_post_likes_read_public'
+  ) THEN
+    CREATE POLICY user_post_likes_read_public ON user_post_likes FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_post_comments' AND policyname = 'user_post_comments_read_public'
+  ) THEN
+    CREATE POLICY user_post_comments_read_public ON user_post_comments FOR SELECT USING (true);
+  END IF;
+END $$;
 
 -- ===================== AMBASSADORS =====================
 DROP TABLE IF EXISTS ambassadors CASCADE;

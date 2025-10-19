@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { ContentCategory } from '@/types'
-import { useMemo } from 'react'
 import { markdownToHtml } from '@/lib/markdown'
 import { useSession } from 'next-auth/react'
+import { useToast } from '@/components/ui/Toast'
 
 export default function SubmitPage() {
   const { address, isConnected } = useAccount()
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [categories, setCategories] = useState<{ slug: string; name: string }[]>([])
@@ -61,10 +62,11 @@ export default function SubmitPage() {
         throw new Error(data.error || '投稿失败')
       }
 
-      alert('投稿成功！等待管理员审核')
+      show('投稿成功！等待管理员审核', { type: 'success' })
       router.push('/')
     } catch (err: any) {
       setError(err.message || '投稿失败，请重试')
+      show(err.message || '投稿失败，请重试', { type: 'error' })
     } finally {
       setIsSubmitting(false)
     }
@@ -80,7 +82,6 @@ export default function SubmitPage() {
     }
     fetchCategories()
   }, [])
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData(prev => ({
       ...prev,
@@ -142,9 +143,13 @@ export default function SubmitPage() {
       form.append('file', file)
       const res = await fetch('/api/content/image', { method: 'POST', body: form })
       const j = await res.json()
-      if (!j.success) return alert(j.error || '图片上传失败')
+      if (!j.success) {
+        show(j.error || '图片上传失败', { type: 'error' })
+        return
+      }
       // Insert markdown image
       insertAtCursor(`\n![image](${j.url})\n`)
+      show('图片已插入', { type: 'success' })
     } finally {
       setUploadingImage(false)
     }

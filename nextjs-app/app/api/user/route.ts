@@ -42,9 +42,10 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions as any)
+    const s = session as any
+    if (!s?.uid) return NextResponse.json({ error: '未登录' }, { status: 401 })
     const body = await request.json()
-    const uid = body?.uid || (session as any)?.uid
-    if (!uid) return NextResponse.json({ error: '缺少 uid 或未登录' }, { status: 400 })
+    const uid = s.uid // 不允许通过 body 指定其他 uid
     const update: any = {}
     if (body.username !== undefined) {
       const un = String(body.username || '').trim()
@@ -54,18 +55,20 @@ export async function PUT(request: NextRequest) {
       }
       update.username = un || null
     }
-    if (body.avatar_url !== undefined) update.avatar_url = body.avatar_url
-    if (body.bio !== undefined) update.bio = body.bio
+    if (body.avatar_url !== undefined) update.avatar_url = String(body.avatar_url || '') || null
+    if (body.bio !== undefined) update.bio = String(body.bio || '') || null
     if (Object.keys(update).length === 0) return NextResponse.json({ error: '无更新字段' }, { status: 400 })
+    // 使用 upsert 保证用户行存在（以 uid 作为冲突键）
     const { data, error } = await supabaseAdmin
       .from('users')
-      .update(update)
-      .eq('uid', uid)
+      .upsert({ uid, ...update }, { onConflict: 'uid' })
       .select('uid,username,avatar_url,bio')
       .single()
-    if (error) throw error
+    if (error) {
+      return NextResponse.json({ error: '更新失败', detail: (error as any)?.message || String(error) }, { status: 400 })
+    }
     return NextResponse.json({ success: true, data })
   } catch (e) {
-    return NextResponse.json({ error: '更新失败' }, { status: 500 })
+    return NextResponse.json({ error: '更新失败', detail: (e as any)?.message || String(e) }, { status: 500 })
   }
 }

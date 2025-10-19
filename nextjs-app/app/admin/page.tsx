@@ -7,10 +7,12 @@ import Header from '@/components/layout/Header'
 import { Submission } from '@/types'
 import { formatDate, truncateAddress } from '@/lib/utils'
 import { isAdmin } from '@/lib/auth'
+import { useToast } from '@/components/ui/Toast'
 
 export default function AdminPage() {
   const { address, isConnected } = useAccount()
   const router = useRouter()
+  const { show } = useToast()
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
@@ -31,7 +33,7 @@ export default function AdminPage() {
         })
         const json = await res.json()
         if (!json.isAdmin) {
-          alert('需要管理员权限')
+          show('需要管理员权限', { type: 'error' })
           router.push('/')
           return
         }
@@ -39,7 +41,7 @@ export default function AdminPage() {
   fetchCategories()
       } catch (e) {
         console.error('Admin check failed', e)
-        alert('管理员校验失败')
+        show('管理员校验失败', { type: 'error' })
         router.push('/')
       }
     }
@@ -92,10 +94,10 @@ export default function AdminPage() {
         setCatForm({ slug: '', name: '' })
         fetchCategories()
       } else {
-        alert(json.error || '保存失败')
+        show(json.error || '保存失败', { type: 'error' })
       }
     } catch (e) {
-      alert('保存失败')
+      show('保存失败', { type: 'error' })
     }
   }
 
@@ -110,14 +112,14 @@ export default function AdminPage() {
       const res = await fetch(url, { method: 'DELETE', headers: { 'x-wallet-address': address || '' } })
       const json = await res.json().catch(() => ({}))
       if (res.ok) fetchCategories()
-      else alert(json.error || '删除失败')
+      else show(json.error || '删除失败', { type: 'error' })
     } catch (e) {
-      alert('删除失败')
+      show('删除失败', { type: 'error' })
     }
   }
 
   const handleApprove = async (submissionId: string) => {
-    if (!confirm('确认批准这个投稿吗？')) return
+  if (!confirm('确认批准这个投稿吗？')) return
 
     try {
       const response = await fetch('/api/approve', {
@@ -131,14 +133,14 @@ export default function AdminPage() {
 
       const data = await response.json()
       if (data.success) {
-        alert('审核通过！内容已发布')
+        show('审核通过！内容已发布', { type: 'success' })
         fetchSubmissions()
       } else {
-        alert(data.error || '操作失败')
+        show(data.error || '操作失败', { type: 'error' })
       }
     } catch (error) {
       console.error('Error approving:', error)
-      alert('操作失败')
+      show('操作失败', { type: 'error' })
     }
   }
 
@@ -157,14 +159,14 @@ export default function AdminPage() {
 
       const data = await response.json()
       if (data.success) {
-        alert('已拒绝该投稿')
+        show('已拒绝该投稿', { type: 'success' })
         fetchSubmissions()
       } else {
-        alert(data.error || '操作失败')
+        show(data.error || '操作失败', { type: 'error' })
       }
     } catch (error) {
       console.error('Error rejecting:', error)
-      alert('操作失败')
+      show('操作失败', { type: 'error' })
     }
   }
 

@@ -4,19 +4,23 @@ import Link from 'next/link'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { signIn, signOut, useSession, getCsrfToken } from 'next-auth/react'
 import { useAccount, useSignMessage } from 'wagmi'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Wind, Star, Clock, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
+import UserAvatar from '@/components/common/UserAvatar'
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
-  const [loginLoading, setLoginLoading] = useState(false)
+  const [formLoading, setFormLoading] = useState(false)
+  const [walletLoading, setWalletLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin')
   const [registerSent, setRegisterSent] = useState(false)
   const [regEmail, setRegEmail] = useState('')
   const [resendCounter, setResendCounter] = useState(0)
+  const [loginIdentifier, setLoginIdentifier] = useState('')
   const [mounted, setMounted] = useState(false)
   const [walletLoginIntent, setWalletLoginIntent] = useState(false)
   const { data: session } = useSession()
@@ -26,6 +30,8 @@ export default function Header() {
   const { signMessageAsync } = useSignMessage()
   const { openConnectModal } = useConnectModal()
   const wcOpenOnce = useRef(false)
+  const router = useRouter()
+  const [miniQ, setMiniQ] = useState('')
 
   useEffect(() => {
     if (!registerSent) return
@@ -52,7 +58,7 @@ export default function Header() {
       if (!walletLoginIntent) return
       if (!isConnected || !address) return
       try {
-        setLoginLoading(true)
+  setWalletLoading(true)
         setLoginError('')
         const nonceRes = await fetch('/api/auth/wallet/nonce', { cache: 'no-store' })
         const { nonce } = await nonceRes.json()
@@ -88,7 +94,7 @@ export default function Header() {
           setLoginError('钱包登录失败，请重试')
         }
       } finally {
-        setLoginLoading(false)
+        setWalletLoading(false)
       }
     }
     run()
@@ -104,13 +110,33 @@ export default function Header() {
     { name: '视频', href: '/videos' },
     { name: '活动', href: '/activities' },
     { name: '大使', href: '/ambassadors' },
-    { name: '投稿', href: '/submit' },
   ]
 
   const [avatarOpen, setAvatarOpen] = useState(false)
   const avatarTimer = useRef<number | null>(null)
   const avatarRef = useRef<HTMLDivElement | null>(null)
   const userName = session?.user?.name || session?.user?.email || '用户'
+  const [socialStats, setSocialStats] = useState<{followers:number; following:number; posts?:number; isFollowing:boolean} | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      const uid = (session as any)?.uid
+      if (!uid) return
+      try {
+        const res = await fetch(`/api/social/stats?uid=${uid}`, { cache: 'no-store' })
+        const j = await res.json()
+        if (j?.success) setSocialStats(j.data)
+      } catch {}
+      try {
+        const ur = await fetch(`/api/user?uid=${uid}`, { cache: 'no-store' })
+        const uj = await ur.json()
+        const url = uj?.data?.user?.avatar_url as string | undefined
+        if (url) setAvatarUrl(url)
+      } catch {}
+    }
+    load()
+  }, [session])
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -118,6 +144,11 @@ export default function Header() {
       if (!avatarRef.current.contains(e.target as Node)) setAvatarOpen(false)
     }
     document.addEventListener('click', onDocClick)
+    const onAvatarUpdated = (e: any) => {
+      const url = e?.detail?.url as string | undefined
+      if (url) setAvatarUrl(url)
+    }
+    window.addEventListener('avatar-updated', onAvatarUpdated as any)
     return () => document.removeEventListener('click', onDocClick)
   }, [])
 
@@ -135,7 +166,7 @@ export default function Header() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex gap-6">
+  <nav className="hidden md:flex items-center gap-6">
           {navItems.map((item) => (
             <Link
               key={item.name}
@@ -145,10 +176,50 @@ export default function Header() {
               {item.name}
             </Link>
           ))}
+          <div className="ml-4 relative">
+            <input
+              value={miniQ}
+              onChange={(e)=>setMiniQ(e.target.value)}
+              onKeyDown={(e)=>{ if (e.key==='Enter' && miniQ.trim()) {
+                const t = miniQ.trim()
+                const isUser = /^@/.test(t)
+                const q = encodeURIComponent(t)
+                router.push(`/search?q=${q}&type=${isUser?'user':'all'}`)
+              } }}
+              placeholder="搜索"
+              className="w-40 xl:w-60 rounded-xl border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            />
+          </div>
         </nav>
 
         {/* User */}
         <div className="flex items-center gap-3 relative">
+          {/* Quick actions (desktop) */}
+          <div className="hidden md:flex items-center gap-5 mr-2">
+            <Link href="/dynamics" className="group flex flex-col items-center justify-center text-[11px] text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 rounded-xl" aria-label="动态">
+              <span className="relative flex items-center justify-center w-8 h-8 rounded-full border bg-white group-hover:border-primary-400">
+                <Wind size={18} className="text-gray-700 group-hover:text-primary-600" />
+              </span>
+              <span className="mt-1">动态</span>
+            </Link>
+            <Link href="/profile" className="group flex flex-col items-center justify-center text-[11px] text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 rounded-xl" aria-label="收藏">
+              <span className="relative flex items-center justify-center w-8 h-8 rounded-full border bg-white group-hover:border-primary-400">
+                <Star size={18} className="text-gray-700 group-hover:text-primary-600" />
+              </span>
+              <span className="mt-1">收藏</span>
+            </Link>
+            <Link href="/profile" className="group flex flex-col items-center justify-center text-[11px] text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 rounded-xl" aria-label="历史">
+              <span className="relative flex items-center justify-center w-8 h-8 rounded-full border bg-white group-hover:border-primary-400">
+                <Clock size={18} className="text-gray-700 group-hover:text-primary-600" />
+              </span>
+              <span className="mt-1">历史</span>
+            </Link>
+          </div>
+          {/* 投稿按钮（突出） */}
+          <Link href="/submit" className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-pink-600 px-3.5 py-1.5 text-white text-sm font-medium hover:bg-pink-700 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-300 focus-visible:ring-offset-2">
+            <Upload size={16} />
+            投稿
+          </Link>
           {session?.user ? (
             <div
               ref={avatarRef}
@@ -168,16 +239,12 @@ export default function Header() {
                 aria-haspopup="true"
                 aria-expanded={avatarOpen}
               >
-                <span className="text-xs font-medium text-gray-700 group-hover:text-primary-600 truncate px-1">
-                  {userName.slice(0,2)}
-                </span>
+                <UserAvatar url={avatarUrl || (session as any)?.avatarUrl} name={userName} size={36} />
               </button>
               {avatarOpen && (
                 <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border shadow-xl p-4 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-lg font-bold">
-                      {userName.slice(0,1).toUpperCase()}
-                    </div>
+                    <UserAvatar url={avatarUrl || (session as any)?.avatarUrl} name={userName} size={56} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{userName}</div>
                       {isNewWalletUser && <div className="text-[10px] text-amber-600 mt-1">首次钱包用户，请完善资料</div>}
@@ -185,15 +252,15 @@ export default function Header() {
                   </div>
                   <div className="grid grid-cols-3 text-center mb-4">
                     <div className="py-2">
-                      <div className="text-base font-semibold">—</div>
+                      <div className="text-base font-semibold">{socialStats?.following ?? '—'}</div>
                       <div className="text-[11px] text-gray-500">关注</div>
                     </div>
                     <div className="py-2 border-x">
-                      <div className="text-base font-semibold">—</div>
+                      <div className="text-base font-semibold">{socialStats?.followers ?? '—'}</div>
                       <div className="text-[11px] text-gray-500">粉丝</div>
                     </div>
                     <div className="py-2">
-                      <div className="text-base font-semibold">—</div>
+                      <div className="text-base font-semibold">{socialStats?.posts ?? '—'}</div>
                       <div className="text-[11px] text-gray-500">动态</div>
                     </div>
                   </div>
@@ -267,24 +334,24 @@ export default function Header() {
                           const fd = new FormData(e.currentTarget as HTMLFormElement)
                           const identifier = String(fd.get('identifier') || '')
                           const password = String(fd.get('password') || '')
-                          setLoginLoading(true)
+                          setFormLoading(true)
                           setLoginError('')
                           const res = await signIn('password', { identifier, password, redirect: false })
                           if (res?.error) setLoginError('账号或密码错误，或邮箱未验证')
                           else setLoginOpen(false)
-                          setLoginLoading(false)
+                          setFormLoading(false)
                         }}
                         className="space-y-3"
                       >
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">邮箱</label>
-                          <input name="identifier" placeholder="邮箱" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
+                          <input name="identifier" placeholder="邮箱" autoComplete="email" value={loginIdentifier} onChange={e=>setLoginIdentifier(e.target.value)} className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                         </div>
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">密码</label>
-                          <input name="password" type="password" placeholder="密码" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
+                          <input name="password" type="password" placeholder="密码" autoComplete="current-password" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                         </div>
-                        <button className="w-full px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-50" disabled={loginLoading}>登录</button>
+                        <button className="w-full px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-50" disabled={formLoading}>登录</button>
                         <div className="text-xs text-gray-500">还没有账号？<button type="button" className="underline hover:text-gray-800" onClick={() => setAuthTab('signup')}>去注册</button></div>
                       </form>
                     ) : (
@@ -297,8 +364,8 @@ export default function Header() {
                             const password = String(fd.get('reg_password') || '')
                             const username = String(fd.get('reg_username') || '')
                             setLoginError('')
-                            setLoginLoading(true)
-                            if (!username) { setLoginError('请填写用户名'); setLoginLoading(false); return }
+                            setFormLoading(true)
+                            if (!username) { setLoginError('请填写用户名'); setFormLoading(false); return }
                             const resp = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, username }) })
                             const json = await resp.json()
                             if (!resp.ok || !json.success) {
@@ -307,7 +374,7 @@ export default function Header() {
                               setRegisterSent(true)
                               setRegEmail(email)
                             }
-                            setLoginLoading(false)
+                            setFormLoading(false)
                           }}
                           className="space-y-3"
                         >
@@ -323,45 +390,45 @@ export default function Header() {
                             <label className="block text-xs text-gray-500 mb-1">密码</label>
                             <input name="reg_password" type="password" placeholder="密码" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                           </div>
-                          <button className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50" disabled={loginLoading}>注册并发送验证码</button>
+                          <button className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50" disabled={formLoading}>注册并发送验证码</button>
                           <div className="text-xs text-gray-500">注册即表示同意平台的服务条款与隐私政策。</div>
                           <div className="text-xs text-gray-500">已有账号？<button type="button" className="underline hover:text-gray-800" onClick={() => setAuthTab('signin')}>去登录</button></div>
                         </form>
                       ) : (
-                        <form
+                        <form autoComplete="off"
                           onSubmit={async (e) => {
                             e.preventDefault()
                             const fd = new FormData(e.currentTarget as HTMLFormElement)
                             const code = String(fd.get('v_code') || '')
                             setLoginError('')
-                            setLoginLoading(true)
+                            setFormLoading(true)
                             const resp = await fetch('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: regEmail, code }) })
                             const json = await resp.json()
                             if (!resp.ok || !json.success) setLoginError(json.error || '验证失败')
-                            else { setAuthTab('signin'); setRegisterSent(false); }
-                            setLoginLoading(false)
+                            else { setAuthTab('signin'); setRegisterSent(false); setLoginIdentifier(regEmail) }
+                            setFormLoading(false)
                           }}
                           className="space-y-3"
                         >
                           <div className="text-sm text-gray-700">验证码已发送至：<span className="font-medium">{regEmail}</span></div>
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">验证码</label>
-                            <input name="v_code" placeholder="请输入 6 位验证码" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
+                            <input name="v_code" placeholder="请输入 6 位验证码" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                           </div>
-                          <button className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50" disabled={loginLoading}>提交验证</button>
+                          <button className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50" disabled={formLoading}>提交验证</button>
                           <div className="flex items-center justify-between text-xs text-gray-600">
                             <span>未收到？检查垃圾箱或稍后重试。</span>
                             <button
                               type="button"
-                              disabled={resendCounter > 0 || loginLoading}
+                              disabled={resendCounter > 0 || formLoading}
                               className={`underline ${resendCounter>0 ? 'opacity-60 cursor-not-allowed' : 'hover:text-gray-800'}`}
                               onClick={async () => {
-                                setLoginLoading(true)
+                                setFormLoading(true)
                                 const resp = await fetch('/api/auth/resend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: regEmail }) })
                                 const json = await resp.json()
                                 if (!resp.ok || !json.success) setLoginError(json.error || '重发失败')
                                 else setResendCounter(60)
-                                setLoginLoading(false)
+                                setFormLoading(false)
                               }}
                             >{resendCounter>0 ? `重发验证码(${resendCounter}s)` : '重发验证码'}</button>
                           </div>
@@ -411,7 +478,7 @@ export default function Header() {
                           setLoginError('')
                           setWalletLoginIntent(true)
                           try {
-                            setLoginLoading(true)
+                            setWalletLoading(true)
                             // 确保每次点击前都重置一次性防抖标记
                             wcOpenOnce.current = false
                             if (!isConnected || !address) {
@@ -431,7 +498,7 @@ export default function Header() {
                                 }
                               }, 800)
                               // 等待用户完成连接，再次自动继续
-                              setLoginLoading(false)
+                              setWalletLoading(false)
                               return
                             }
                             // 已连接则直接继续（备用路径，通常由 effect 接管）
@@ -452,7 +519,7 @@ export default function Header() {
                                     openConnectModal?.()
                                   }
                                 }, 100)
-                                setLoginLoading(false)
+                                setWalletLoading(false)
                                 return
                               }
                               throw e
@@ -472,13 +539,13 @@ export default function Header() {
                           } catch (e) {
                             setLoginError('钱包登录失败，请重试')
                           } finally {
-                            setLoginLoading(false)
+                            setWalletLoading(false)
                           }
                         }}
                         className="w-full text-left px-3 py-2 rounded-lg border hover:bg-white disabled:opacity-50"
-                        disabled={loginLoading}
+                        disabled={walletLoading}
                       >
-                        使用钱包登录{loginLoading ? '中…' : ''}
+                        使用钱包登录{walletLoading ? '中…' : ''}
                       </button>
                     </div>
                     <div className="mt-6 text-center">
@@ -517,6 +584,7 @@ export default function Header() {
                 {item.name}
               </Link>
             ))}
+            <Link href="/submit" className="text-sm font-medium transition-colors hover:text-primary-500" onClick={()=> setMobileMenuOpen(false)}>投稿</Link>
           </nav>
         </div>
       )}

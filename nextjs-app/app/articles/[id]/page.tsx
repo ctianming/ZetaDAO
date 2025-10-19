@@ -7,6 +7,8 @@ import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
 import { mapPublishedRow } from '@/lib/transform'
 import { markdownToHtml } from '@/lib/markdown'
+import AuthorCard from '@/components/content/AuthorCard'
+import AuthorInline from '@/components/content/AuthorInline'
 
 interface PageProps {
   params: {
@@ -48,14 +50,14 @@ export default async function ArticleDetailPage({ params }: PageProps) {
           <header className="mb-8">
             <h1 className="text-4xl font-bold mb-4">{article.title}</h1>
             
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         <span>发布于 {formatDate(article.publishedAt)}</span>
               <span>•</span>
               <span>{article.views || 0} 次浏览</span>
-        {article.authorName && (
+        {article.authorUid && (
                 <>
                   <span>•</span>
-          <span>作者：{article.authorName}</span>
+                  <AuthorInline uid={article.authorUid} name={article.authorName || '用户'} avatarUrl={(article as any).authorAvatarUrl || undefined} />
                 </>
               )}
             </div>
@@ -96,6 +98,13 @@ export default async function ArticleDetailPage({ params }: PageProps) {
 
           {/* Tip & View client actions */}
           <ClientActions contentId={article.id} />
+
+          {/* 作者卡片与关注 */}
+          {article.authorUid && (
+            <div className="mt-10">
+              <AuthorCard uid={article.authorUid} />
+            </div>
+          )}
 
           {/* 外部链接 */}
       {article.metadata?.externalLink && (

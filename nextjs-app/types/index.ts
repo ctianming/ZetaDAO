@@ -40,6 +40,7 @@ export interface PublishedContent {
   title: string
   content: string
   category: ContentCategory
+  authorUid?: string
   authorWallet?: string
   authorName?: string
   publishedAt: string

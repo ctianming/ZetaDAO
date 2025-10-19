@@ -23,6 +23,7 @@ export function mapPublishedRow(row: any): PublishedContent {
     title: row.title,
     content: row.content,
     category: row.category,
+    authorUid: row.author_uid ?? undefined,
   articleCategory: row.article_category ?? row?.metadata?.articleCategory ?? undefined,
     authorWallet: row.author_wallet ?? undefined,
     authorName: row.author_name ?? undefined,

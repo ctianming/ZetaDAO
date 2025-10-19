@@ -35,14 +35,14 @@ export async function POST(request: NextRequest) {
     if (existed) {
       const { error: updErr } = await supabaseAdmin
         .from('auth_local_users')
-        .update({ password_hash: hash, verification_code: code, verification_expires: expires })
+        .update({ password_hash: hash, username: un, verification_code: code, verification_expires: expires })
         .eq('id', existed.id)
       if (updErr) throw updErr
       upsertOk = true
     } else {
       const { error: insErr } = await supabaseAdmin
         .from('auth_local_users')
-        .insert({ email: em, password_hash: hash, verification_code: code, verification_expires: expires })
+        .insert({ email: em, username: un, password_hash: hash, verification_code: code, verification_expires: expires })
       if (insErr) throw insErr
       upsertOk = true
     }

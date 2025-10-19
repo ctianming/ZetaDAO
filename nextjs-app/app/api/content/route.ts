@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get('category')
   const articleCategory = searchParams.get('articleCategory')
   const tag = searchParams.get('tag')
+  const authorUid = searchParams.get('authorUid')
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = parseInt(searchParams.get('offset') || '0')
 
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
   if (category) query = query.eq('category', category)
   if (articleCategory) query = query.eq('article_category', articleCategory)
   if (tag) query = query.overlaps('tags', [tag])
+  if (authorUid) query = query.eq('author_uid', authorUid)
 
     const { data, error, count } = await query
 

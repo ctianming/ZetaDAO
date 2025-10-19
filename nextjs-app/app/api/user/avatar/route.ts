@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
     const form = await req.formData()
     const file = form.get('file') as File | null
-    const filename = (form.get('filename') as string) || `avatar_${s.uid}_${Date.now()}.png`
+  const filename = (form.get('filename') as string) || `avatar_${Date.now()}.png`
     if (!file) return NextResponse.json({ error: '缺少文件' }, { status: 400 })
 
     // Validate type & size
@@ -36,17 +36,17 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer)
 
     // Upload to Supabase Storage
+  const key = `${s.uid}/${filename}`
     const { data: up, error: upErr } = await (supabaseAdmin as any).storage
       .from(bucket)
-      .upload(filename, buffer, {
+      .upload(key, buffer, {
         contentType: file.type || 'image/png',
         upsert: true,
       })
     if (upErr) return NextResponse.json({ error: `上传失败: ${upErr.message}` }, { status: 500 })
 
   // Build proxy URL for private bucket access via signed URL
-  const base = process.env.NEXT_PUBLIC_APP_URL || ''
-  const proxyUrl = `${base.replace(/\/$/, '')}/api/storage/file?path=${encodeURIComponent(up.path)}`
+  const proxyUrl = `/api/storage/file?path=${encodeURIComponent(key)}`
 
     // Save to users.avatar_url
     const { error: updErr } = await supabaseAdmin
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       .eq('uid', s.uid)
     if (updErr) return NextResponse.json({ error: '更新用户头像失败' }, { status: 500 })
 
-    return NextResponse.json({ success: true, url: proxyUrl, path: up.path })
+  return NextResponse.json({ success: true, url: proxyUrl, path: key })
   } catch (e) {
     return NextResponse.json({ error: '服务器错误' }, { status: 500 })
   }

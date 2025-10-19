@@ -8,6 +8,7 @@ import { RainbowKitProvider, getDefaultConfig } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 import { useMemo, useState } from 'react'
 import { SessionProvider } from 'next-auth/react'
+import { ToastProvider } from '@/components/ui/Toast'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
@@ -50,7 +51,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SessionProvider>
           <RainbowKitProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </RainbowKitProvider>
         </SessionProvider>
       </QueryClientProvider>
