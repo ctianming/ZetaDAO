@@ -3,6 +3,7 @@ import Header from '@/components/layout/Header'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 export default function DynamicsPage() {
   const { data: session } = useSession()
@@ -86,6 +87,7 @@ function FeedList() {
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(false)
+  const [profiles, setProfiles] = useState<Record<string, { username?: string | null; avatar_url?: string | null }>>({})
   const sp = useSearchParams()
   const uid = sp?.get('uid') || ''
   const [mode, setMode] = useState<'all' | 'following'>('all')
@@ -98,6 +100,7 @@ function FeedList() {
   const [lightbox, setLightbox] = useState<{ urls: string[], index: number } | null>(null)
 
   const load = async (reset = false) => {
+    if (loading && !reset) return
     setLoading(true)
     try {
       const params = new URLSearchParams({ limit: '10' })
@@ -105,17 +108,17 @@ function FeedList() {
       if (!uid && mode === 'following') params.set('following', '1')
       if (!reset && cursor) params.set('before', cursor)
       const res = await fetch(`/api/social/posts?${params.toString()}`, { cache: 'no-store' })
-      const j = await res.json()
+      const j = await res.json().catch(() => null)
       if (j?.success) {
         const newItems = reset ? j.items : [...items, ...j.items]
         setItems(newItems)
         setCursor(j.nextCursor || null)
         setHasMore(!!j.hasMore)
-        // fetch like counts in batch
-        const ids = newItems.map((it:any)=>it.id)
-        if (ids.length>0) {
+        setProfiles(prev => ({ ...prev, ...(j.profiles || {}) }))
+        const ids = newItems.map((it: any) => it.id)
+        if (ids.length > 0) {
           const res2 = await fetch(`/api/social/likes?ids=${ids.join(',')}`, { cache: 'no-store' })
-          const j2 = await res2.json()
+          const j2 = await res2.json().catch(() => null)
           if (j2?.success) {
             setLikeCounts(j2.counts || {})
             setLikedSet(new Set<string>(j2.liked || []))
@@ -142,12 +145,28 @@ function FeedList() {
           <button className={`px-3 py-1.5 rounded-lg border ${mode==='following'?'bg-gray-100':''}`} onClick={()=> setMode('following')}>只看关注</button>
         </div>
       )}
-      {items.map(it => (
-        <div key={it.id} className="bg-white rounded-2xl border shadow-sm p-4">
+      {loading && items.length === 0 && <FeedSkeleton />}
+      {!loading && items.length === 0 && (
+        <div className="text-sm text-gray-500 rounded-2xl border bg-white p-6 text-center">
+          暂无动态内容
+        </div>
+      )}
+      {items.map(it => {
+        const profile = profiles[it.user_uid] || {}
+        const displayName = profile.username || '用户'
+        const avatarUrl = profile.avatar_url || null
+        return (
+          <div key={it.id} className="bg-white rounded-2xl border shadow-sm p-4">
           <div className="flex items-center justify-between mb-1">
             <a href={`/u/${it.user_uid}`} className="flex items-center gap-2 group">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center text-[11px] font-semibold">U</div>
-              <span className="text-sm text-gray-700 group-hover:underline">用户</span>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="w-8 h-8 rounded-full border object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center text-xs font-semibold">
+                  {displayName.slice(0,1)}
+                </div>
+              )}
+              <span className="text-sm text-gray-700 group-hover:underline">{displayName}</span>
             </a>
             <div className="text-xs text-gray-500">{new Date(it.created_at).toLocaleString()}</div>
           </div>
@@ -180,19 +199,24 @@ function FeedList() {
               )}
               <span className="min-w-[1.5ch] text-gray-700">{likeCounts[it.id] || 0}</span>
             </button>
-            <button aria-label="评论" className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border hover:bg-gray-50" onClick={()=>{
-              const open = commentOpenFor === it.id ? null : it.id
-              setCommentOpenFor(open)
-              if (open && !comments[it.id]) {
-                // load comments first page
-                fetch(`/api/social/comments?postId=${it.id}&limit=10`, { cache: 'no-store' }).then(r=>r.json()).then(j=>{
-                  if (j?.success) {
-                    setComments(prev=> ({ ...prev, [it.id]: j.items }))
-                    setCommentCursors(prev=> ({ ...prev, [it.id]: j.nextCursor || null }))
-                  }
-                })
-              }
-            }}>
+            <button
+              aria-label="评论"
+              className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border hover:bg-gray-50"
+              onClick={() => {
+                const nextOpen = commentOpenFor === it.id ? null : it.id
+                setCommentOpenFor(nextOpen)
+                if (nextOpen && !comments[it.id]) {
+                  fetch(`/api/social/comments?postId=${it.id}&limit=10`, { cache: 'no-store' })
+                    .then(r => r.json())
+                    .then(j => {
+                      if (j?.success) {
+                        setComments(prev => ({ ...prev, [it.id]: j.items }))
+                        setCommentCursors(prev => ({ ...prev, [it.id]: j.nextCursor || null }))
+                      }
+                    })
+                }
+              }}
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-600 group-hover:text-primary-600"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></svg>
               <span>评论</span>
             </button>
@@ -240,9 +264,10 @@ function FeedList() {
               </div>
             </div>
           )}
-        </div>
-      ))}
-      {loading && <div className="text-sm text-gray-500">加载中...</div>}
+          </div>
+        )
+      })}
+  {loading && items.length > 0 && <div className="text-sm text-gray-500">加载中...</div>}
       {hasMore && !loading && <button onClick={()=>load(false)} className="text-primary-600 hover:underline text-sm">加载更多</button>}
       {/* Lightbox */}
       {lightbox && (
@@ -250,6 +275,27 @@ function FeedList() {
           <img src={lightbox.urls[lightbox.index]} alt="preview" className="max-w-[90vw] max-h-[85vh] object-contain" />
         </div>
       )}
+    </div>
+  )
+}
+
+function FeedSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 3 }).map((_, idx) => (
+        <div key={idx} className="bg-white rounded-2xl border shadow-sm p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Skeleton height={32} width={32} radius="9999px" className="border" />
+            <div className="flex-1">
+              <Skeleton height={12} width="30%" className="mb-2" />
+              <Skeleton height={10} width="20%" />
+            </div>
+          </div>
+          <Skeleton height={12} className="mb-2" />
+          <Skeleton height={12} width="80%" className="mb-2" />
+          <Skeleton height={12} width="60%" />
+        </div>
+      ))}
     </div>
   )
 }

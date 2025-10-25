@@ -1,14 +1,26 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Note: during `next build`, env vars might be absent in this workspace.
-// Provide local fallbacks to prevent build-time crashes; real values must be configured in runtime env.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'public-anon-key'
+function requireEnv(name: string, fallback?: string) {
+  const value = process.env[name] ?? fallback
+  if (!value) {
+    throw new Error(`Missing environment variable: ${name}`)
+  }
+  return value
+}
+
+const isDev = process.env.NODE_ENV !== 'production'
+
+const supabaseUrl = isDev
+  ? requireEnv('NEXT_PUBLIC_SUPABASE_URL', 'http://localhost:54321')
+  : requireEnv('NEXT_PUBLIC_SUPABASE_URL')
+const supabaseAnonKey = isDev
+  ? requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'public-anon-key')
+  : requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Server-side client with service role key
-export const supabaseAdmin = createClient(
-  supabaseUrl,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'service-role-key'
-)
+const serviceRoleKey = isDev
+  ? requireEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-role-key')
+  : requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+
+export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)

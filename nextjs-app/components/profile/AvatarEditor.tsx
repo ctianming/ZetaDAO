@@ -179,7 +179,7 @@ export default function AvatarEditor({ avatarUrl, username, isSelf, size = 64, c
   // Live small preview (128x128) thumbnail
   useEffect(() => {
     if (!preview || !imgNatural || !containerRef.current || !imgEl) { setThumbUrl(null); return }
-    let raf = requestAnimationFrame(() => {
+  const raf = requestAnimationFrame(() => {
       const vb = getContentRect(containerRef.current!)
       const ib = imgEl!.getBoundingClientRect()
       const scaleX = imgNatural.w / ib.width

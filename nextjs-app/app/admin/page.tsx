@@ -2,11 +2,12 @@
 
 import { useAccount } from 'wagmi'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { Submission } from '@/types'
 import { formatDate, truncateAddress } from '@/lib/utils'
-import { isAdmin } from '@/lib/auth'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import PromptDialog from '@/components/ui/PromptDialog'
 import { useToast } from '@/components/ui/Toast'
 
 export default function AdminPage() {
@@ -19,6 +20,45 @@ export default function AdminPage() {
   const [catList, setCatList] = useState<{ id: string; slug: string; name: string; description?: string }[]>([])
   const [catLoading, setCatLoading] = useState(true)
   const [catForm, setCatForm] = useState<{ id?: string; slug: string; name: string; description?: string }>({ slug: '', name: '' })
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState<{ id?: string; slug: string; name?: string } | null>(null)
+  const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null)
+  const [promptReject, setPromptReject] = useState<{ open: boolean; id?: string } | null>(null)
+
+  const fetchSubmissions = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/submissions?status=${filter}`, {
+        headers: {
+          'x-wallet-address': address || '',
+        },
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setSubmissions(data.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching submissions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [address, filter])
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      setCatLoading(true)
+      const res = await fetch('/api/categories', {
+        headers: { 'x-wallet-address': address || '' },
+        cache: 'no-store',
+      })
+      const json = await res.json()
+      if (json?.data) setCatList(json.data)
+    } catch (error) {
+      console.error('Error fetching categories', error)
+    } finally {
+      setCatLoading(false)
+    }
+  }, [address])
 
   useEffect(() => {
     const checkAndFetch = async () => {
@@ -37,49 +77,16 @@ export default function AdminPage() {
           router.push('/')
           return
         }
-  fetchSubmissions()
-  fetchCategories()
-      } catch (e) {
-        console.error('Admin check failed', e)
+        fetchSubmissions()
+        fetchCategories()
+      } catch (error) {
+        console.error('Admin check failed', error)
         show('管理员校验失败', { type: 'error' })
         router.push('/')
       }
     }
     checkAndFetch()
-  }, [isConnected, address, filter])
-
-  const fetchSubmissions = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch(`/api/submissions?status=${filter}`, {
-        headers: {
-          'x-wallet-address': address || '',
-        },
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        setSubmissions(data.data || [])
-      }
-    } catch (error) {
-      console.error('Error fetching submissions:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchCategories = async () => {
-    try {
-      setCatLoading(true)
-      const res = await fetch('/api/categories', { headers: { 'x-wallet-address': address || '' }, cache: 'no-store' })
-      const json = await res.json()
-      if (json?.data) setCatList(json.data)
-    } catch (e) {
-      console.error('Error fetching categories', e)
-    } finally {
-      setCatLoading(false)
-    }
-  }
+  }, [isConnected, address, router, show, fetchSubmissions, fetchCategories])
 
   const saveCategory = async () => {
     try {
@@ -96,7 +103,8 @@ export default function AdminPage() {
       } else {
         show(json.error || '保存失败', { type: 'error' })
       }
-    } catch (e) {
+    } catch (error) {
+      console.error('save category failed', error)
       show('保存失败', { type: 'error' })
     }
   }
@@ -106,68 +114,15 @@ export default function AdminPage() {
   }
 
   const deleteCategory = async (c: { id: string; slug: string; name?: string }) => {
-    if (!confirm(`确认删除分类 ${c.name || c.slug} 吗？`)) return
-    try {
-      const url = c.id ? `/api/categories?id=${encodeURIComponent(c.id)}` : `/api/categories?slug=${encodeURIComponent(c.slug)}`
-      const res = await fetch(url, { method: 'DELETE', headers: { 'x-wallet-address': address || '' } })
-      const json = await res.json().catch(() => ({}))
-      if (res.ok) fetchCategories()
-      else show(json.error || '删除失败', { type: 'error' })
-    } catch (e) {
-      show('删除失败', { type: 'error' })
-    }
+    setConfirmDeleteCat(c)
   }
 
   const handleApprove = async (submissionId: string) => {
-  if (!confirm('确认批准这个投稿吗？')) return
-
-    try {
-      const response = await fetch('/api/approve', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-wallet-address': address || '',
-        },
-        body: JSON.stringify({ submissionId }),
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        show('审核通过！内容已发布', { type: 'success' })
-        fetchSubmissions()
-      } else {
-        show(data.error || '操作失败', { type: 'error' })
-      }
-    } catch (error) {
-      console.error('Error approving:', error)
-      show('操作失败', { type: 'error' })
-    }
+    setConfirmApproveId(submissionId)
   }
 
   const handleReject = async (submissionId: string) => {
-    const reason = prompt('请输入拒绝原因（可选）：')
-    
-    try {
-      const response = await fetch('/api/reject', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-wallet-address': address || '',
-        },
-        body: JSON.stringify({ submissionId, reason }),
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        show('已拒绝该投稿', { type: 'success' })
-        fetchSubmissions()
-      } else {
-        show(data.error || '操作失败', { type: 'error' })
-      }
-    } catch (error) {
-      console.error('Error rejecting:', error)
-      show('操作失败', { type: 'error' })
-    }
+    setPromptReject({ open: true, id: submissionId })
   }
 
   if (!isConnected) {
@@ -369,6 +324,92 @@ export default function AdminPage() {
           )}
         </div>
       </main>
+      {/* Modals */}
+      <ConfirmDialog
+        open={!!confirmDeleteCat}
+        title="删除分类"
+        description={`确认删除分类 ${confirmDeleteCat?.name || confirmDeleteCat?.slug} 吗？`}
+        onCancel={() => setConfirmDeleteCat(null)}
+        onConfirm={async () => {
+          if (!confirmDeleteCat) return
+          try {
+            const url = confirmDeleteCat.id ? `/api/categories?id=${encodeURIComponent(confirmDeleteCat.id)}` : `/api/categories?slug=${encodeURIComponent(confirmDeleteCat.slug)}`
+            const res = await fetch(url, { method: 'DELETE', headers: { 'x-wallet-address': address || '' } })
+            const json = await res.json().catch(() => ({}))
+            if (res.ok) {
+              show('已删除分类', { type: 'success' })
+              fetchCategories()
+            } else {
+              show(json.error || '删除失败', { type: 'error' })
+            }
+          } catch (error) {
+            console.error('delete category failed', error)
+            show('删除失败', { type: 'error' })
+          } finally {
+            setConfirmDeleteCat(null)
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmApproveId}
+        title="批准投稿"
+        description="确认批准这个投稿吗？批准后将立即发布。"
+        onCancel={() => setConfirmApproveId(null)}
+        onConfirm={async () => {
+          if (!confirmApproveId) return
+          try {
+            const response = await fetch('/api/approve', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-wallet-address': address || '' },
+              body: JSON.stringify({ submissionId: confirmApproveId }),
+            })
+            const data = await response.json()
+            if (data.success) {
+              show('审核通过！内容已发布', { type: 'success' })
+              fetchSubmissions()
+            } else {
+              show(data.error || '操作失败', { type: 'error' })
+            }
+          } catch (error) {
+            console.error('Error approving:', error)
+            show('操作失败', { type: 'error' })
+          } finally {
+            setConfirmApproveId(null)
+          }
+        }}
+      />
+
+      <PromptDialog
+        open={!!promptReject?.open}
+        title="拒绝投稿"
+        description="请输入拒绝原因（可选）"
+        placeholder="例如：内容质量不达标"
+        confirmText="提交"
+        onCancel={() => setPromptReject(null)}
+        onConfirm={async (reason) => {
+          const submissionId = promptReject?.id
+          setPromptReject(null)
+          if (!submissionId) return
+          try {
+            const response = await fetch('/api/reject', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-wallet-address': address || '' },
+              body: JSON.stringify({ submissionId, reason }),
+            })
+            const data = await response.json()
+            if (data.success) {
+              show('已拒绝该投稿', { type: 'success' })
+              fetchSubmissions()
+            } else {
+              show(data.error || '操作失败', { type: 'error' })
+            }
+          } catch (error) {
+            console.error('Error rejecting:', error)
+            show('操作失败', { type: 'error' })
+          }
+        }}
+      />
     </div>
   )
 }

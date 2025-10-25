@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.max(1, Math.min(50, parseInt(searchParams.get('limit') || '20')))
     const offset = Math.max(0, parseInt(searchParams.get('offset') || '0'))
     if (!q) return NextResponse.json({ success: true, data: [], total: 0 })
-    let query = supabase.from('ambassadors').select('*', { count: 'exact' })
+  const query = supabase.from('ambassadors').select('*', { count: 'exact' })
       .or(`name.ilike.%${q}%,country.ilike.%${q}%,city.ilike.%${q}%`)
       .eq('status', 'active')
       .order('contributions', { ascending: false })

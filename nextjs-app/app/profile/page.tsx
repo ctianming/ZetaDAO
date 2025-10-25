@@ -1,9 +1,8 @@
 'use client'
 
 import Header from '@/components/layout/Header'
-import { useSession } from 'next-auth/react'
-import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
+import { useSession, signIn } from 'next-auth/react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { Award, Shield, Link as LinkIcon, Wallet, User as UserIcon, KeyRound, TrendingUp, Loader2, Lock } from 'lucide-react'
 import { computeLevel } from '@/lib/xp'
@@ -11,8 +10,9 @@ import { useConnectModal } from '@rainbow-me/rainbowkit'
 import ArticleCard from '@/components/content/ArticleCard'
 import { PublishedContent } from '@/types'
 import AvatarEditor from '@/components/profile/AvatarEditor'
-import { useRef } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { useRouter } from 'next/navigation'
 
 function mapType(t?: string) {
   switch (t) {
@@ -26,9 +26,9 @@ function mapType(t?: string) {
 }
 
 export default function ProfilePage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [username, setUsername] = useState('')
-  const [saving, setSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [bio, setBio] = useState('')
   const [identities, setIdentities] = useState<any[]>([])
@@ -36,7 +36,7 @@ export default function ProfilePage() {
   const [pwdNew, setPwdNew] = useState('')
   const [pwdMsg, setPwdMsg] = useState('')
   const [pwdOpen, setPwdOpen] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const walletAddress = (session as any)?.walletAddress as string | undefined
   const uid = (session as any)?.uid as string | undefined
   const { address, isConnected } = useAccount()
@@ -50,14 +50,38 @@ export default function ProfilePage() {
   const [editErrName, setEditErrName] = useState<string>('')
   const [editErrBio, setEditErrBio] = useState<string>('')
   const editPanelRef = useRef<HTMLDivElement | null>(null)
+  const hasPromptedForLogin = useRef(false)
   const [xpLoading, setXpLoading] = useState(false)
   const [xpCursor, setXpCursor] = useState<string | null>(null)
   const [xpHasMore, setXpHasMore] = useState(false)
   const { openConnectModal } = useConnectModal()
   const { show } = useToast()
+  const [unbindProvider, setUnbindProvider] = useState<string | null>(null)
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false)
+  const requestLogin = useCallback(() => {
+    if (typeof window === 'undefined') {
+      void signIn()
+      return
+    }
+    window.dispatchEvent(new Event('zd-open-login'))
+  }, [])
 
   // 简易等级：Lv1:0-99, Lv2:100-299, Lv3:300-599, Lv4:600-999, Lv5:1000+
   const { level, nextLevelAt, progressPct } = useMemo(() => computeLevel(xpTotal || 0), [xpTotal])
+
+  useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      if (!hasPromptedForLogin.current) {
+        setLoginPromptOpen(true)
+        hasPromptedForLogin.current = true
+      }
+    } else if (status === 'authenticated') {
+      hasPromptedForLogin.current = false
+      setLoginPromptOpen(false)
+    }
+  }, [status])
 
   const isWalletBound = useMemo(() => {
     if (walletAddress) return true
@@ -65,8 +89,12 @@ export default function ProfilePage() {
   }, [walletAddress, identities])
 
   const boundWalletDisplay = useMemo(() => {
-    return walletAddress || identities.find(i => i.provider === 'wallet')?.account_id || address || ''
-  }, [walletAddress, identities, address])
+    if (walletAddress) return walletAddress
+    const identityWallet = identities.find(i => i.provider === 'wallet')?.account_id
+    if (identityWallet) return identityWallet
+    if (!mounted) return ''
+    return address || ''
+  }, [walletAddress, identities, address, mounted])
 
   useEffect(() => {
     const load = async () => {
@@ -97,12 +125,7 @@ export default function ProfilePage() {
     loadArticles()
   }, [uid])
 
-  useEffect(() => {
-    void loadMoreXp(true)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const loadMoreXp = async (reset = false) => {
+  const loadMoreXp = useCallback(async (reset = false) => {
     setXpLoading(true)
     try {
       const params = new URLSearchParams({ limit: '10' })
@@ -117,32 +140,22 @@ export default function ProfilePage() {
     } finally {
       setXpLoading(false)
     }
-  }
+  }, [xpCursor])
 
-  const save = async () => {
-    try {
-      setSaving(true)
-      const res = await fetch('/api/user', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, avatar_url: avatarUrl, bio })
-      })
-      const j = await res.json()
-  if (!j?.success) show(j?.error || '保存失败', { type: 'error' })
-    } finally {
-      setSaving(false)
-    }
-  }
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    void loadMoreXp(true)
+  }, [status, loadMoreXp])
+
+  useEffect(() => {
+    if (status === 'authenticated') return
+    setXpEvents([])
+    setXpCursor(null)
+    setXpHasMore(false)
+  }, [status])
 
   const unbind = async (provider: string) => {
-    if (!confirm(`确定解绑 ${provider} ?`)) return
-    const res = await fetch(`/api/auth/identity?provider=${provider}`, { method: 'DELETE' })
-    const j = await res.json()
-    if (!j.success) show(j.error || '解绑失败', { type: 'error' })
-    else {
-      setIdentities(ids => ids.filter(i => i.provider !== provider))
-      show('解绑成功', { type: 'success' })
-    }
+    setUnbindProvider(provider)
   }
 
   const changePassword = async () => {
@@ -152,52 +165,54 @@ export default function ProfilePage() {
       body: JSON.stringify({ currentPassword: pwdCurrent, newPassword: pwdNew })
     })
     const j = await res.json()
-  if (!j.success) setPwdMsg(j.error || '修改失败')
-  else setPwdMsg('密码修改成功')
+    if (!j.success) setPwdMsg(j.error || '修改失败')
+    else setPwdMsg('密码修改成功')
   }
 
-  async function compressImage(file: File, maxWidth = 512, maxHeight = 512, quality = 0.85): Promise<File> {
-    try {
-      const img = document.createElement('img')
-      const url = URL.createObjectURL(file)
-      await new Promise((res, rej) => {
-        img.onload = () => res(null)
-        img.onerror = rej
-        img.src = url
-      })
-      const canvas = document.createElement('canvas')
-      let { width, height } = img
-      const ratio = Math.min(maxWidth / width, maxHeight / height, 1)
-      width = Math.round(width * ratio)
-      height = Math.round(height * ratio)
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, width, height)
-      const type = file.type === 'image/png' ? 'image/webp' : file.type
-      const blob: Blob = await new Promise((res) => canvas.toBlob(b => res(b!), type, quality))
-      URL.revokeObjectURL(url)
-      return new File([blob], file.name.replace(/\.(png|jpg|jpeg)$/i, '.webp'), { type })
-    } catch {
-      return file
-    }
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-4 py-12 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Loader2 className="w-4 h-4 animate-spin" /> 加载中...
+          </div>
+        </main>
+      </div>
+    )
   }
 
-  const onUpload = async (file: File) => {
-    setUploading(true)
-    try {
-      // client-side compress to reduce bandwidth
-      file = await compressImage(file, 512, 512, 0.85)
-      const form = new FormData()
-      form.append('file', file)
-      form.append('filename', file.name)
-      const res = await fetch('/api/user/avatar', { method: 'POST', body: form })
-      const j = await res.json()
-      if (!j.success) { show(j.error || '上传失败', { type: 'error' }); return }
-      setAvatarUrl(j.url)
-    } finally {
-      setUploading(false)
-    }
+  if (status === 'unauthenticated') {
+    return (
+      <div className="min-h-screen">
+        <Header />
+        <main className="container mx-auto px-4 py-12">
+          <div className="max-w-lg mx-auto text-center bg-white rounded-2xl border shadow-sm p-8">
+            <h1 className="text-2xl font-semibold mb-4">个人资料</h1>
+            <p className="text-sm text-gray-600 mb-6">请先登录后再访问个人资料页。</p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => router.push('/')}
+                className="px-4 py-2 rounded-md border hover:bg-gray-50"
+              >返回首页</button>
+              <button
+                onClick={requestLogin}
+                className="px-4 py-2 rounded-md bg-primary-600 text-white hover:bg-primary-700"
+              >去登录</button>
+            </div>
+          </div>
+        </main>
+        <ConfirmDialog
+          open={loginPromptOpen}
+          title="需要登录"
+          description="访问个人资料前请先登录。现在去登录吗？"
+          confirmText="去登录"
+          cancelText="返回首页"
+          onCancel={() => { setLoginPromptOpen(false); router.push('/') }}
+          onConfirm={() => { setLoginPromptOpen(false); requestLogin() }}
+        />
+      </div>
+    )
   }
 
   return (
@@ -450,7 +465,7 @@ export default function ProfilePage() {
                 )}
                 {xpHasMore && !xpLoading && (
                   <button
-                    onClick={() => loadMoreXp(false)}
+                    onClick={() => void loadMoreXp(false)}
                     className="text-sm text-primary-600 hover:underline"
                   >加载更多</button>
                 )}
@@ -470,6 +485,25 @@ export default function ProfilePage() {
           setUsername(editName); setBio(editBio); setEditProfileOpen(false)
         }} />
       )}
+      {/* 确认解绑 */}
+      <ConfirmDialog
+        open={!!unbindProvider}
+        title="确认解绑"
+        description={`确定解绑 ${unbindProvider} ?`}
+        onCancel={()=> setUnbindProvider(null)}
+        onConfirm={async ()=>{
+          const provider = unbindProvider
+          setUnbindProvider(null)
+          if (!provider) return
+          const res = await fetch(`/api/auth/identity?provider=${provider}`, { method: 'DELETE' })
+          const j = await res.json()
+          if (!j.success) show(j.error || '解绑失败', { type: 'error' })
+          else {
+            setIdentities(ids => ids.filter(i => i.provider !== provider))
+            show('解绑成功', { type: 'success' })
+          }
+        }}
+      />
       {/* 修改密码弹窗 */}
       {pwdOpen && (
         <div className="fixed inset-0 z-[9999]">

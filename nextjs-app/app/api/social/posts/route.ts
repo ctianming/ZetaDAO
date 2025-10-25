@@ -29,7 +29,22 @@ export async function GET(req: NextRequest) {
     const items = (data || []).slice(0, limit)
     const hasMore = (data || []).length > limit
     const nextCursor = hasMore ? items[items.length - 1]?.created_at : null
-    return NextResponse.json({ success: true, items, nextCursor, hasMore })
+
+    let profiles: Record<string, { username?: string | null; avatar_url?: string | null }> = {}
+    const uids = Array.from(new Set(items.map((it: any) => it.user_uid).filter(Boolean)))
+    if (uids.length > 0) {
+      const { data: users, error: userErr } = await supabaseAdmin
+        .from('users')
+        .select('uid,username,avatar_url')
+        .in('uid', uids)
+      if (!userErr && users) {
+        profiles = Object.fromEntries(
+          users.map((user: any) => [user.uid, { username: user.username, avatar_url: user.avatar_url }])
+        )
+      }
+    }
+
+    return NextResponse.json({ success: true, items, nextCursor, hasMore, profiles })
   } catch (e) {
     return NextResponse.json({ error: '获取动态失败' }, { status: 500 })
   }

@@ -118,3 +118,65 @@ export interface ReviewSubmissionPayload {
   action: 'approve' | 'reject'
   reason?: string
 }
+
+// Shop types
+export type ShopProduct = {
+  id: string
+  slug: string
+  name: string
+  description?: string
+  image_url?: string
+  metadata_uri?: string
+  onchain_id?: string
+  price_wei: string // bigint as string
+  stock: string
+  status: 'active' | 'inactive'
+  last_synced_block?: string
+  created_at: string
+  updated_at: string
+}
+
+export type ShopOrder = {
+  id: string
+  onchain_id?: string
+  product_id?: string
+  product_onchain_id?: string
+  buyer_uid: string
+  buyer_address?: string
+  quantity: string
+  unit_price_wei: string
+  total_price_wei: string
+  status: 'created' | 'paid' | 'shipped' | 'completed' | 'cancelled' | 'refunded'
+  metadata_hash?: string
+  last_status_note?: string
+  chain_id?: number
+  last_event_tx_hash?: string
+  paid_tx_hash?: string
+  refund_tx_hash?: string
+  shipped_at?: string
+  completed_at?: string
+  cancelled_at?: string
+  refunded_at?: string
+  shipping_contact?: string
+  shipping_phone?: string
+  shipping_address?: string
+  offchain_metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type ShopAddress = {
+  id: string
+  user_uid: string
+  contact_name: string
+  phone: string
+  address_line1: string
+  address_line2?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  country?: string
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}

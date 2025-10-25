@@ -104,12 +104,26 @@ export default function Header() {
   // 仅客户端渲染 Portal，避免 SSR/Hydration 问题
   useEffect(() => { setMounted(true) }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => {
+      setLoginError('')
+      setRegisterSent(false)
+      setRegEmail('')
+      setAuthTab('signin')
+      setLoginOpen(true)
+    }
+    window.addEventListener('zd-open-login', handler)
+    return () => window.removeEventListener('zd-open-login', handler)
+  }, [])
+
   const navItems = [
     { name: '首页', href: '/' },
     { name: '文章', href: '/articles' },
     { name: '视频', href: '/videos' },
     { name: '活动', href: '/activities' },
     { name: '大使', href: '/ambassadors' },
+    { name: '商店', href: '/shop' },
   ]
 
   const [avatarOpen, setAvatarOpen] = useState(false)

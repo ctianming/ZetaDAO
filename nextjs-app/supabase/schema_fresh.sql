@@ -386,4 +386,102 @@ ON CONFLICT DO NOTHING;
 INSERT INTO user_identities (user_uid, provider, account_id)
 SELECT uid, 'wallet', wallet_address FROM users WHERE wallet_address IS NOT NULL ON CONFLICT DO NOTHING;
 
+-- ===================== SHOP (PRODUCTS / ORDERS / ADDRESSES) =====================
+
+DROP TABLE IF EXISTS shop_contract_admins CASCADE;
+CREATE TABLE shop_contract_admins (
+  address TEXT PRIMARY KEY,
+  user_uid UUID REFERENCES users(uid) ON DELETE SET NULL,
+  label TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  added_by UUID REFERENCES users(uid) ON DELETE SET NULL,
+  added_tx_hash TEXT,
+  revoked_tx_hash TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_shop_contract_admins_active ON shop_contract_admins(active);
+CREATE TRIGGER trg_shop_contract_admins_updated BEFORE UPDATE ON shop_contract_admins FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TABLE IF EXISTS shop_products CASCADE;
+CREATE TABLE shop_products (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  onchain_id NUMERIC(78,0),
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  metadata_uri TEXT,
+  price_wei NUMERIC(78,0) NOT NULL CHECK (price_wei >= 0),
+  stock BIGINT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  status TEXT NOT NULL DEFAULT 'inactive' CHECK (status IN ('active','inactive')),
+  last_synced_block NUMERIC(78,0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (onchain_id)
+);
+CREATE INDEX idx_shop_products_status ON shop_products(status);
+CREATE TRIGGER trg_shop_products_updated BEFORE UPDATE ON shop_products FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TABLE IF EXISTS shop_orders CASCADE;
+CREATE TABLE shop_orders (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  onchain_id NUMERIC(78,0),
+  product_id UUID REFERENCES shop_products(id) ON DELETE SET NULL,
+  product_onchain_id NUMERIC(78,0),
+  buyer_uid UUID REFERENCES users(uid) ON DELETE SET NULL,
+  buyer_address TEXT,
+  quantity BIGINT NOT NULL CHECK (quantity > 0),
+  unit_price_wei NUMERIC(78,0) NOT NULL CHECK (unit_price_wei >= 0),
+  total_price_wei NUMERIC(78,0) NOT NULL CHECK (total_price_wei >= 0),
+  status TEXT NOT NULL DEFAULT 'created' CHECK (
+    status IN ('created','paid','shipped','completed','cancelled','refunded')
+  ),
+  metadata_hash TEXT,
+  last_status_note TEXT,
+  chain_id INTEGER,
+  last_event_tx_hash TEXT,
+  paid_tx_hash TEXT,
+  refund_tx_hash TEXT,
+  shipped_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  refunded_at TIMESTAMPTZ,
+  shipping_contact TEXT,
+  shipping_phone TEXT,
+  shipping_address TEXT,
+  offchain_metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (onchain_id)
+);
+CREATE INDEX idx_shop_orders_buyer_uid ON shop_orders(buyer_uid);
+CREATE INDEX idx_shop_orders_status ON shop_orders(status);
+CREATE INDEX idx_shop_orders_product_onchain_id ON shop_orders(product_onchain_id);
+CREATE TRIGGER trg_shop_orders_updated BEFORE UPDATE ON shop_orders FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TABLE IF EXISTS shop_addresses CASCADE;
+CREATE TABLE shop_addresses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_uid UUID NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  contact_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  address_line1 TEXT NOT NULL,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  country TEXT,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_shop_addresses_user ON shop_addresses(user_uid);
+CREATE TRIGGER trg_shop_addresses_updated BEFORE UPDATE ON shop_addresses FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- (Optional) RLS for shop tables can be enabled depending on your app model
+-- ALTER TABLE shop_products ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE shop_orders ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE shop_addresses ENABLE ROW LEVEL SECURITY;
+
 COMMIT;

@@ -39,6 +39,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let authorUid: string | null = submission.user_uid || null
+    if (!authorUid && submission.wallet_address) {
+      const { data: ident } = await supabaseAdmin
+        .from('user_identities')
+        .select('user_uid')
+        .eq('provider', 'wallet')
+        .eq('account_id', submission.wallet_address.toLowerCase())
+        .maybeSingle()
+      authorUid = ident?.user_uid || null
+    }
+
+    let authorName: string | null = null
+    if (authorUid) {
+      const { data: userProfile } = await supabaseAdmin
+        .from('users')
+        .select('username')
+        .eq('uid', authorUid)
+        .maybeSingle()
+      authorName = userProfile?.username || null
+    }
+
     // 更新投稿状态为已批准
     const { error: updateError } = await supabaseAdmin
       .from('submissions')
@@ -55,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 发布内容到 published_content 表
-  const { data: published, error: publishError } = await supabaseAdmin
+    const { data: published, error: publishError } = await supabaseAdmin
       .from('published_content')
       .insert({
         submission_id: submissionId,
@@ -63,11 +84,13 @@ export async function POST(request: NextRequest) {
         content: submission.content,
         category: submission.category,
         author_wallet: submission.wallet_address,
-    metadata: submission.metadata,
-    // persist tags in column for faster filter
-    tags: Array.isArray(submission.metadata?.tags) ? submission.metadata.tags : [],
-    // for articles, persist classification
-    article_category: submission.metadata?.articleCategory || null,
+        author_uid: authorUid,
+        author_name: authorName,
+        metadata: submission.metadata,
+        // persist tags in column for faster filter
+        tags: Array.isArray(submission.metadata?.tags) ? submission.metadata.tags : [],
+        // for articles, persist classification
+        article_category: submission.metadata?.articleCategory || null,
       })
       .select()
       .single()
@@ -83,16 +106,6 @@ export async function POST(request: NextRequest) {
 
     // 发表奖励 XP：50xp 给作者
     try {
-      let authorUid: string | null = submission.user_uid || null
-      if (!authorUid && submission.wallet_address) {
-        const { data: ident } = await supabaseAdmin
-          .from('user_identities')
-          .select('user_uid')
-          .eq('provider', 'wallet')
-          .eq('account_id', submission.wallet_address)
-          .maybeSingle()
-        authorUid = ident?.user_uid || null
-      }
       if (authorUid) {
         await supabaseAdmin.from('xp_events').insert({
           user_uid: authorUid,
