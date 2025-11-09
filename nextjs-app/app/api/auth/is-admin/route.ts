@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isAdmin } from '@/lib/auth'
+import { isAdmin, getAdminWalletFromRequest } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
-  const wallet = request.headers.get('x-wallet-address') || undefined
-  const ok = isAdmin(wallet)
-  return NextResponse.json({ isAdmin: ok })
+  const addr = getAdminWalletFromRequest(request)
+  const is = isAdmin(addr)
+  return NextResponse.json({ isAdmin: is, address: addr })
 }

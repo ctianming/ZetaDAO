@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdmin } from '@/lib/auth'
+import { isAdminFromRequest } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
@@ -12,8 +12,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = req.headers.get('x-wallet-address') || undefined
-  if (!isAdmin(admin)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const now = new Date().toISOString()
   const payload: any = {
@@ -39,8 +38,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const admin = req.headers.get('x-wallet-address') || undefined
-  if (!isAdmin(admin)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const id = body.id
   if (!id) return NextResponse.json({ success: false, error: '缺少 id' }, { status: 400 })
@@ -56,8 +54,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const admin = req.headers.get('x-wallet-address') || undefined
-  if (!isAdmin(admin)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const url = new URL(req.url)
   const id = url.searchParams.get('id')
   if (!id) return NextResponse.json({ success: false, error: '缺少 id' }, { status: 400 })

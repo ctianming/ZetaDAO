@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdminFromRequest, getAdminWalletFromRequest } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const walletAddress = request.headers.get('x-wallet-address')
-    
-    // 验证管理员权限
+    // 验证管理员权限（基于已验证的连接钱包 Cookie）
     try {
-      requireAdmin(walletAddress || undefined)
+      requireAdminFromRequest(request)
     } catch (error) {
-      return NextResponse.json(
-        { error: '需要管理员权限' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: '需要管理员权限' }, { status: 403 })
     }
 
     const { submissionId, blockchainHash } = await request.json()
@@ -60,20 +55,46 @@ export async function POST(request: NextRequest) {
       authorName = userProfile?.username || null
     }
 
-    // 更新投稿状态为已批准
-    const { error: updateError } = await supabaseAdmin
-      .from('submissions')
-      .update({
+    // 更新投稿状态为已批准（兼容两套列：reviewed_by 与 reviewed_by_uid）
+    const reviewerWallet = getAdminWalletFromRequest(request)
+    let updateErr: any = null
+    {
+      const { error } = await supabaseAdmin
+        .from('submissions')
+        .update({
+          status: 'approved',
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: reviewerWallet || null,
+          blockchain_hash: blockchainHash || null,
+        } as any)
+        .eq('id', submissionId)
+      updateErr = error
+    }
+    if (updateErr && (updateErr as any).code === 'PGRST204') {
+      // 列不存在：回退为 reviewed_by_uid（若能解析到）或不写 reviewer
+      let reviewerUid: string | null = null
+      if (reviewerWallet) {
+        const { data: ident } = await supabaseAdmin
+          .from('user_identities')
+          .select('user_uid')
+          .eq('provider', 'wallet')
+          .eq('account_id', reviewerWallet.toLowerCase())
+          .maybeSingle()
+        reviewerUid = ident?.user_uid || null
+      }
+      const updates: Record<string, any> = {
         status: 'approved',
         reviewed_at: new Date().toISOString(),
-        reviewed_by: walletAddress,
         blockchain_hash: blockchainHash || null,
-      })
-      .eq('id', submissionId)
-
-    if (updateError) {
-      throw updateError
+      }
+      if (reviewerUid) updates.reviewed_by_uid = reviewerUid
+      const { error } = await supabaseAdmin
+        .from('submissions')
+        .update(updates)
+        .eq('id', submissionId)
+      updateErr = error
     }
+    if (updateErr) throw updateErr
 
     // 发布内容到 published_content 表
     const { data: published, error: publishError } = await supabaseAdmin
@@ -124,7 +145,7 @@ export async function POST(request: NextRequest) {
       .from('audit_logs')
       .insert({
         action: 'approve_submission',
-        actor_wallet: walletAddress,
+        actor_wallet: reviewerWallet || null,
         target_type: 'submission',
         target_id: submissionId,
         metadata: { blockchain_hash: blockchainHash },

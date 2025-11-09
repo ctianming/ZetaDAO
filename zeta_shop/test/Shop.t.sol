@@ -159,6 +159,177 @@ contract ShopTest is Test {
         shop.setProductStock(productId, 5);
     }
 
+    function testShipAndCompleteFlow() public {
+        uint256 productId = _createProduct(1 ether, 2);
+        vm.deal(buyer, 2 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, keccak256(bytes("meta")));
+
+        // pay
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+        Shop.Order memory order = shop.getOrder(orderId);
+        assertEq(uint256(order.status), uint256(Shop.OrderStatus.Paid));
+
+        // owner as admin (owner is admin by default)
+        vm.prank(owner);
+        shop.markShipped(orderId, keccak256(bytes("ship")));
+        order = shop.getOrder(orderId);
+        assertEq(uint256(order.status), uint256(Shop.OrderStatus.Shipped));
+
+        vm.prank(owner);
+        shop.markCompleted(orderId, keccak256(bytes("done")));
+        order = shop.getOrder(orderId);
+        assertEq(uint256(order.status), uint256(Shop.OrderStatus.Completed));
+    }
+
+    function testCreateOrderInvalidQuantity() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.prank(buyer);
+        vm.expectRevert(Shop.InvalidQuantity.selector);
+        shop.createOrder(productId, 0, bytes32(0));
+    }
+
+    function testCreateOrderNotActive() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.prank(owner);
+        shop.toggleProduct(productId, false);
+        vm.prank(buyer);
+        vm.expectRevert(Shop.NotActive.selector);
+        shop.createOrder(productId, 1, bytes32(0));
+    }
+
+    function testCreateOrderStockUnavailable() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.prank(buyer);
+        vm.expectRevert(Shop.StockUnavailable.selector);
+        shop.createOrder(productId, 2, bytes32(0));
+    }
+
+    function testPayOrderWrongSender() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 1 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        // manager tries to pay
+        vm.deal(manager, 1 ether);
+        vm.prank(manager);
+        vm.expectRevert(Shop.NotBuyer.selector);
+        shop.payOrder{value: 1 ether}(orderId);
+    }
+
+    function testPayOrderWrongAmount() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 2 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(buyer);
+        vm.expectRevert(Shop.PaymentAmountMismatch.selector);
+        shop.payOrder{value: 2 ether}(orderId);
+    }
+
+    function testCancelAfterPaidReverts() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 1 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+        vm.prank(buyer);
+        vm.expectRevert(Shop.InvalidStatus.selector);
+        shop.cancelOrder(orderId, bytes32("n/a"));
+    }
+
+    function testMarkShippedInvalidStatus() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(owner);
+        vm.expectRevert(Shop.InvalidStatus.selector);
+        shop.markShipped(orderId, bytes32("n/a"));
+    }
+
+    function testMarkCompletedInvalidStatus() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 1 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+        // directly complete without shipped
+        vm.prank(owner);
+        vm.expectRevert(Shop.InvalidStatus.selector);
+        shop.markCompleted(orderId, bytes32("n/a"));
+    }
+
+    function testRefundInvalidStatus() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(owner);
+        vm.expectRevert(Shop.InvalidStatus.selector);
+        shop.refundOrder(orderId, bytes32("n/a"));
+    }
+
+    function testSetAdminZeroAddressReverts() public {
+        vm.prank(owner);
+        vm.expectRevert(Shop.Unauthorized.selector);
+        shop.setAdmin(address(0), true);
+    }
+
+    function testGetInvalidProductAndOrderRevert() public {
+        vm.expectRevert(Shop.InvalidProduct.selector);
+        shop.getProduct(999);
+        vm.expectRevert(Shop.InvalidOrder.selector);
+        shop.getOrder(888);
+    }
+
+    function testContractVersion() public {
+        // sanity check version string exists
+        // We cannot call pure view returning string via interface easily in foundry's assert,
+        // but we can compare hash for stability.
+        (bool ok, bytes memory data) = address(shop).staticcall(abi.encodeWithSignature("contractVersion()"));
+        assertTrue(ok, "version call");
+        string memory ver = abi.decode(data, (string));
+        assertEq(keccak256(bytes(ver)), keccak256(bytes("1.0.0")), "version");
+    }
+
+    function testTransferOwnership() public {
+        // prepare funds via a product & order first
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 1 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+
+        // transfer ownership to new manager
+        vm.prank(owner);
+        shop.transferOwnership(manager);
+
+        vm.prank(owner);
+        vm.expectRevert(Shop.NotOwner.selector);
+        shop.withdraw(payable(owner), 0);
+
+        // new owner can withdraw
+        vm.prank(manager);
+        shop.withdraw(payable(manager), 0);
+        assertEq(address(shop).balance, 0);
+    }
+
+    function testNextIdsIncrement() public {
+        uint256 id1 = _createProduct(1 ether, 1);
+        uint256 id2 = _createProduct(2 ether, 2);
+        assertEq(id1 + 1, id2, "product id increments");
+
+        vm.deal(buyer, 10 ether);
+        vm.prank(buyer);
+        uint256 o1 = shop.createOrder(id1, 1, bytes32(0));
+        vm.prank(buyer);
+        uint256 o2 = shop.createOrder(id2, 1, bytes32(0));
+        assertEq(o1 + 1, o2, "order id increments");
+    }
+
     /// --------------------
     /// Helpers
     /// --------------------

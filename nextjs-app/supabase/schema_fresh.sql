@@ -54,6 +54,8 @@ DROP TABLE IF EXISTS submissions CASCADE;
 CREATE TABLE submissions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_uid UUID REFERENCES users(uid) ON DELETE SET NULL,
+  -- legacy compatibility: some code paths still read wallet_address directly
+  wallet_address TEXT,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   category TEXT NOT NULL CHECK (category IN ('article','video','activity','ambassador')),
@@ -61,6 +63,8 @@ CREATE TABLE submissions (
   submitted_at TIMESTAMPTZ DEFAULT NOW(),
   reviewed_at TIMESTAMPTZ,
   reviewed_by_uid UUID REFERENCES users(uid) ON DELETE SET NULL,
+  -- legacy reviewer wallet (optional)
+  reviewed_by TEXT,
   blockchain_hash TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -68,6 +72,8 @@ CREATE TABLE submissions (
 );
 CREATE INDEX idx_submissions_status ON submissions(status);
 CREATE INDEX idx_submissions_user_uid ON submissions(user_uid);
+CREATE INDEX idx_submissions_reviewed_by ON submissions(reviewed_by);
+CREATE INDEX idx_submissions_wallet ON submissions(wallet_address);
 CREATE INDEX idx_submissions_category ON submissions(category);
 CREATE INDEX idx_submissions_created ON submissions(created_at DESC);
 
@@ -77,6 +83,9 @@ CREATE TABLE published_content (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   submission_id UUID REFERENCES submissions(id) ON DELETE SET NULL,
   author_uid UUID REFERENCES users(uid) ON DELETE SET NULL,
+  -- legacy compatibility for wallet-centric code paths and seed data
+  author_wallet TEXT,
+  author_name TEXT,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   category TEXT NOT NULL CHECK (category IN ('article','video','activity','ambassador')),
@@ -96,6 +105,7 @@ CREATE TABLE published_content (
 CREATE INDEX idx_published_category ON published_content(category);
 CREATE INDEX idx_published_date ON published_content(published_at DESC);
 CREATE INDEX idx_published_author_uid ON published_content(author_uid);
+CREATE INDEX idx_published_author_wallet ON published_content(author_wallet);
 CREATE INDEX idx_published_views ON published_content(views DESC);
 CREATE INDEX idx_published_slug ON published_content(slug);
 CREATE INDEX idx_published_article_category ON published_content(article_category);
@@ -239,13 +249,16 @@ DROP TABLE IF EXISTS audit_logs CASCADE;
 CREATE TABLE audit_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   action TEXT NOT NULL,
-  actor_uid UUID NOT NULL REFERENCES users(uid) ON DELETE SET NULL,
+  -- allow either uid or wallet to be recorded by various API paths
+  actor_uid UUID REFERENCES users(uid) ON DELETE SET NULL,
+  actor_wallet TEXT,
   target_type TEXT,
   target_id UUID,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_audit_logs_actor_uid ON audit_logs(actor_uid);
+CREATE INDEX idx_audit_logs_actor_wallet ON audit_logs(actor_wallet);
 CREATE INDEX idx_audit_logs_created ON audit_logs(created_at DESC);
 
 -- ===================== ARTICLE CATEGORIES =====================
@@ -479,7 +492,7 @@ CREATE TABLE shop_addresses (
 CREATE INDEX idx_shop_addresses_user ON shop_addresses(user_uid);
 CREATE TRIGGER trg_shop_addresses_updated BEFORE UPDATE ON shop_addresses FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- (Optional) RLS for shop tables can be enabled depending on your app model
+-- (Optional) RLS for shop tables can be enabled depending on app model
 -- ALTER TABLE shop_products ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE shop_orders ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE shop_addresses ENABLE ROW LEVEL SECURITY;

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/db'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdminFromRequest } from '@/lib/auth'
 
 // GET /api/categories?search=kw
 export async function GET(request: NextRequest) {
@@ -23,8 +23,7 @@ export async function GET(request: NextRequest) {
 // POST /api/categories  body: { slug, name, description }
 export async function POST(request: NextRequest) {
   try {
-    const wallet = request.headers.get('x-wallet-address') || undefined
-    requireAdmin(wallet)
+    requireAdminFromRequest(request)
     const body = await request.json()
     const { slug, name, description } = body || {}
     if (!slug || !name) return NextResponse.json({ error: '缺少必要字段' }, { status: 400 })
@@ -44,8 +43,7 @@ export async function POST(request: NextRequest) {
 // PUT /api/categories  body: { id|slug, name?, description? }
 export async function PUT(request: NextRequest) {
   try {
-    const wallet = request.headers.get('x-wallet-address') || undefined
-    requireAdmin(wallet)
+    requireAdminFromRequest(request)
     const body = await request.json()
     const { id, slug, name, description } = body || {}
     if (!id && !slug) return NextResponse.json({ error: '缺少标识符' }, { status: 400 })
@@ -67,8 +65,7 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/categories?id=... | slug=...
 export async function DELETE(request: NextRequest) {
   try {
-    const wallet = request.headers.get('x-wallet-address') || undefined
-    requireAdmin(wallet)
+    requireAdminFromRequest(request)
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const slug = searchParams.get('slug')

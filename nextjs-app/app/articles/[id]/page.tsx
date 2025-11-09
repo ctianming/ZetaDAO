@@ -9,6 +9,7 @@ import { mapPublishedRow } from '@/lib/transform'
 import { markdownToHtml } from '@/lib/markdown'
 import AuthorCard from '@/components/content/AuthorCard'
 import AuthorInline from '@/components/content/AuthorInline'
+import ShareButtons from '@/components/content/ShareButtons'
 
 interface PageProps {
   params: {
@@ -75,6 +76,9 @@ export default async function ArticleDetailPage({ params }: PageProps) {
               </div>
             )}
           </header>
+
+          {/* 分享按钮 */}
+          <ShareButtons title={article.title} tags={article.metadata?.tags || []} imageUrl={article.metadata?.imageUrl || null} className="mb-6 flex items-center gap-2 flex-wrap" />
 
           {/* 文章封面图 */}
       {article.metadata?.imageUrl && (

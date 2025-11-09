@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdmin } from '@/lib/auth'
+import { isAdminFromRequest } from '@/lib/auth'
 
 function toCsv(rows: any[]): string {
   if (!rows.length) return ''
@@ -19,8 +19,7 @@ function toCsv(rows: any[]): string {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = req.headers.get('x-wallet-address') || undefined
-  if (!isAdmin(admin)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const url = new URL(req.url)
   const status = url.searchParams.get('status')
   const format = url.searchParams.get('format')

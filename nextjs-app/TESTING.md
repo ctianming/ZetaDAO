@@ -66,29 +66,28 @@ curl -X POST http://localhost:3000/api/submit \
   }'
 
 # 管理员获取投稿列表（待审核）
-curl "http://localhost:3000/api/submissions?status=pending" \
-  -H 'x-wallet-address: 0xAdminWallet'
+# 注意：管理员接口现基于已连接钱包的 httpOnly Cookie 进行鉴权。
+# 建议在浏览器中使用 Header 的“连接钱包”按钮完成签名登录后，再在同一浏览器会话中访问管理员页面或调用接口。
+curl "http://localhost:3000/api/submissions?status=pending"
 
-# 管理员批准投稿
+# 管理员批准投稿（需要浏览器会话携带 Cookie；纯 curl 难以完成签名并设置 Cookie，建议用浏览器/Postman 复用 Cookie）
 curl -X POST http://localhost:3000/api/approve \
   -H 'Content-Type: application/json' \
-  -H 'x-wallet-address: 0xAdminWallet' \
   -d '{"submissionId": "<uuid>"}'
 
 # 全局搜索（q 支持标题/内容 ILIKE；可选：category, articleCategory, tag, limit, offset）
 curl "http://localhost:3000/api/search?q=zeta&category=article&articleCategory=基础&tag=demo&limit=10&offset=0"
 
-# 管理员拒绝投稿
+# 管理员拒绝投稿（同上，需 Cookie）
 curl -X POST http://localhost:3000/api/reject \
   -H 'Content-Type: application/json' \
-  -H 'x-wallet-address: 0xAdminWallet' \
   -d '{"submissionId": "<uuid>", "reason": "Not fit"}'
 ```
 
 ## 6. 常见问题
 - 构建期/启动期无法连接 WalletConnect：请确保 `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` 已填写；
 - 列表为空：请检查数据库连接与是否插入了示例数据；
-- 403/未授权：管理员接口需在 Header 传入 `x-wallet-address` 且该地址在管理员名单或 DB 中具有 admin 角色。
+- 403/未授权：管理员接口基于 httpOnly Cookie 中的已验证钱包地址进行鉴权，请使用前端“连接钱包”完成签名以设置 Cookie，且该地址需在管理员名单（ENV: `ADMIN_WALLETS`）或 DB 中具备 admin 角色。
 
 ## 7. 合约（可选）
 本项目后端已完成 off-chain 版 MVP；若需 on-chain 审计记录，可新增一个简易合约（如 ContentRegistry）记录 `submissionId/hash/actor/timestamp` 事件。可使用 Hardhat/Foundry 部署与测试。若需要我可以为仓库补上合约脚手架与测试用例。

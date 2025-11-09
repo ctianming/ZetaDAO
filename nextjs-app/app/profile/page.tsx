@@ -3,7 +3,7 @@
 import Header from '@/components/layout/Header'
 import { useSession, signIn } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useSignMessage } from 'wagmi'
 import { Award, Shield, Link as LinkIcon, Wallet, User as UserIcon, KeyRound, TrendingUp, Loader2, Lock } from 'lucide-react'
 import { computeLevel } from '@/lib/xp'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
@@ -39,7 +39,9 @@ export default function ProfilePage() {
   const [mounted, setMounted] = useState(false)
   const walletAddress = (session as any)?.walletAddress as string | undefined
   const uid = (session as any)?.uid as string | undefined
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, connector: activeConnector } = useAccount()
+  const { signMessageAsync } = useSignMessage()
+  const activeConnectorId = activeConnector?.id
   const [bindMsg, setBindMsg] = useState('')
   const [binding, setBinding] = useState(false)
   const xpTotal = (session as any)?.xpTotal as number | undefined
@@ -58,6 +60,25 @@ export default function ProfilePage() {
   const { show } = useToast()
   const [unbindProvider, setUnbindProvider] = useState<string | null>(null)
   const [loginPromptOpen, setLoginPromptOpen] = useState(false)
+  // 签名提醒 watchdog：10s 未检测到签名完成则给出更明确的引导
+  const signWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearSignWatchdog = useCallback(() => {
+    if (signWatchdogRef.current) {
+      clearTimeout(signWatchdogRef.current)
+      signWatchdogRef.current = null
+    }
+  }, [])
+  const startSignWatchdog = useCallback(() => {
+    clearSignWatchdog()
+    signWatchdogRef.current = setTimeout(() => {
+      // 仍处于绑定中且尚未完成签名->提交
+      if (activeConnectorId === 'walletConnect') {
+        setBindMsg('未检测到签名弹窗，请打开钱包App，进入“待处理/通知”查看并确认签名；若无，请断开并重新通过 WalletConnect 连接后再试。')
+      } else {
+        setBindMsg('未检测到签名弹窗，请检查浏览器钱包弹窗是否被拦截（广告拦截/无痕模式），或在钱包扩展中手动确认请求。')
+      }
+    }, 10000)
+  }, [activeConnectorId, clearSignWatchdog])
   const requestLogin = useCallback(() => {
     if (typeof window === 'undefined') {
       void signIn()
@@ -83,18 +104,16 @@ export default function ProfilePage() {
     }
   }, [status])
 
-  const isWalletBound = useMemo(() => {
-    if (walletAddress) return true
-    return identities.some(i => i.provider === 'wallet')
-  }, [walletAddress, identities])
+  const walletIdentity = useMemo(() => identities.find(i => i.provider === 'wallet') || null, [identities])
+
+  const isWalletBound = useMemo(() => Boolean(walletIdentity), [walletIdentity])
 
   const boundWalletDisplay = useMemo(() => {
+    if (walletIdentity?.account_id) return walletIdentity.account_id
     if (walletAddress) return walletAddress
-    const identityWallet = identities.find(i => i.provider === 'wallet')?.account_id
-    if (identityWallet) return identityWallet
     if (!mounted) return ''
     return address || ''
-  }, [walletAddress, identities, address, mounted])
+  }, [walletIdentity, walletAddress, address, mounted])
 
   useEffect(() => {
     const load = async () => {
@@ -361,33 +380,207 @@ export default function ProfilePage() {
                       >连接钱包</button>
                     ) : (
                       <button
-                        disabled={binding || isWalletBound || !address}
+                        disabled={binding || (isWalletBound && walletIdentity?.account_id?.toLowerCase() === address?.toLowerCase()) || !address}
                         onClick={async ()=>{
                           setBindMsg('')
+                          if (!isConnected) { openConnectModal?.(); setBindMsg('请先连接钱包'); return }
                           if (!address) { setBindMsg('未检测到钱包地址'); return }
+                          const currentAddress = address
                           setBinding(true)
                           try {
-                            const res = await fetch('/api/auth/identity', {
-                              method: 'POST', headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ provider: 'wallet', account_id: address })
-                            })
-                            const j = await res.json()
-                            if (!j.success) setBindMsg(j.error || '绑定失败')
+                            console.debug('[bind] start, address:', address)
+                            const nonceRes = await fetch('/api/auth/wallet/nonce', { cache: 'no-store' })
+                            const { nonce } = await nonceRes.json()
+                            const message = `Sign-in to ZetaDAO\n\nNonce: ${nonce}`
+                            let signature: string | null = null
+                            // 注入类钱包：预先触发账户授权请求，确保扩展弹窗被激活
+                            if (activeConnectorId !== 'walletConnect') {
+                              try {
+                                let eth = (typeof window !== 'undefined' ? (window as any).ethereum : null)
+                                if (eth?.providers?.length) {
+                                  const mm = eth.providers.find((p: any) => p?.isMetaMask || p?.providerInfo?.rdns === 'io.metamask')
+                                  if (mm) eth = mm
+                                }
+                                if (eth?.request) {
+                                  await eth.request({ method: 'eth_requestAccounts' })
+                                  await new Promise(r => setTimeout(r, 150))
+                                }
+                              } catch (preErr: any) {
+                                const m = String(preErr?.message || '')
+                                if (/denied|rejected|cancel/i.test(m)) { setBindMsg('已取消授权'); return }
+                                // 静默失败则继续由签名阶段处理
+                              }
+                            }
+                            setBindMsg('已发起签名请求，请在钱包中确认…')
+                            startSignWatchdog()
+                            try {
+                              // 增加 60s 超时保护，避免无限等待
+                              signature = await Promise.race([
+                                signMessageAsync({ message }),
+                                new Promise<string>((_, reject) => setTimeout(() => reject(new Error('SIGN_TIMEOUT')), 60000))
+                              ]) as string
+                            } catch (err: any) {
+                              const msg = String(err?.message || '')
+                              if (msg === 'SIGN_TIMEOUT') {
+                                if (activeConnectorId === 'walletConnect') setBindMsg('签名超时：请打开钱包App手动确认请求，或断开重连后再试')
+                                else setBindMsg('签名超时：请检查浏览器钱包弹窗是否被拦截，或在钱包扩展中手动确认后重试')
+                                return
+                              }
+                              // 钱包未授权当前站点（常见于 Coinbase/部分钱包会抛出 4100 或包含 authorized 字样的错误）
+                              if ((err?.code === 4100) || /authorized/i.test(msg) || /not been authorized/i.test(msg)) {
+                                // 触发授权请求（eth_requestAccounts），授权成功后重试签名一次
+                                try {
+                                  if (activeConnectorId === 'walletConnect') {
+                                    // WalletConnect：不要调用 window.ethereum，提示用户在手机钱包内授权/确认
+                                    setBindMsg('请在已连接的钱包App内授权账户访问，并确认签名请求；若未弹出，请打开App查看待处理请求。')
+                                    await new Promise(r => setTimeout(r, 400))
+                                    startSignWatchdog()
+                                    try { signature = await signMessageAsync({ message }) } catch (e2: any) {
+                                      const m2 = String(e2?.message || '')
+                                      if (/denied|rejected|cancel/i.test(m2)) setBindMsg('已取消签名')
+                                      else setBindMsg('签名失败，请在钱包App授权/确认后重试')
+                                      return
+                                    }
+                                  } else {
+                                    let eth = (typeof window !== 'undefined' ? (window as any).ethereum : null)
+                                    // 在多注入场景（MetaMask + Coinbase）下优先选择 MetaMask 提供者
+                                    if (eth?.providers?.length) {
+                                      const mm = eth.providers.find((p: any) => p?.isMetaMask || p?.providerInfo?.rdns === 'io.metamask')
+                                      if (mm) eth = mm
+                                    }
+                                    if (eth?.request) {
+                                      await eth.request({ method: 'eth_requestAccounts' })
+                                      // 小延迟以等待钱包状态同步
+                                      await new Promise(r => setTimeout(r, 200))
+                                      try {
+                                        setBindMsg('已发起签名请求，请在钱包中确认…')
+                                        startSignWatchdog()
+                                        signature = await Promise.race([
+                                          signMessageAsync({ message }),
+                                          new Promise<string>((_, reject) => setTimeout(() => reject(new Error('SIGN_TIMEOUT')), 60000))
+                                        ]) as string
+                                      } catch (e2: any) {
+                                        const m2 = String(e2?.message || '')
+                                        if (m2 === 'SIGN_TIMEOUT') { setBindMsg('签名超时：请检查浏览器钱包弹窗或在扩展中手动确认后重试'); return }
+                                        if (/denied|rejected|cancel/i.test(m2)) {
+                                          setBindMsg('已取消签名')
+                                        } else {
+                                          setBindMsg('签名失败，请在钱包授权账户访问后重试')
+                                        }
+                                        return
+                                      }
+                                    } else {
+                                      // 回退到连接弹窗
+                                      openConnectModal?.()
+                                      setBindMsg('请先在钱包中授权本网站访问账户，授权后再点击绑定。')
+                                      return
+                                    }
+                                  }
+                                } catch (eReq: any) {
+                                  // 用户拒绝或钱包不支持 request 权限
+                                  const m3 = String(eReq?.message || '')
+                                  if (/denied|rejected|cancel/i.test(m3)) setBindMsg('已取消授权')
+                                  else setBindMsg('需要钱包授权账户访问，请在钱包中同意后重试')
+                                  return
+                                }
+                              } else if (/denied|rejected|cancel/i.test(msg)) {
+                                setBindMsg('已取消签名')
+                                return
+                              } else {
+                                // -32002 通常表示已有请求在处理中（例如钱包弹窗未处理）
+                                if (String(err?.code) === '-32002' || /already pending|processing/i.test(msg)) {
+                                  setBindMsg('钱包已弹出请求，请在钱包中完成当前操作…')
+                                  return
+                                }
+                                if (activeConnectorId === 'walletConnect') {
+                                  setBindMsg('签名失败，请在钱包App中查看并完成请求，或断开后重新通过 WalletConnect 连接再试')
+                                  return
+                                } else {
+                                  // 兜底：直接调用以太坊原生 API 尝试 personal_sign / eth_sign（注入类钱包）
+                                  try {
+                                    let eth = (typeof window !== 'undefined' ? (window as any).ethereum : null)
+                                    if (eth?.providers?.length) {
+                                      const mm = eth.providers.find((p: any) => p?.isMetaMask || p?.providerInfo?.rdns === 'io.metamask')
+                                      if (mm) eth = mm
+                                    }
+                                    if (eth?.request && currentAddress) {
+                                      try {
+                                        // 优先 personal_sign
+                                        signature = await eth.request({ method: 'personal_sign', params: [message, currentAddress] })
+                                      } catch (ePs: any) {
+                                        // 再尝试 eth_sign（部分钱包可能禁用）
+                                        if (eth?.request) {
+                                          signature = await eth.request({ method: 'eth_sign', params: [currentAddress, message] })
+                                        }
+                                      }
+                                    }
+                                  } catch {}
+                                  if (!signature) {
+                                    setBindMsg('签名失败，请重试')
+                                    return
+                                  }
+                                }
+                              }
+                            }
+                            clearSignWatchdog()
+                            if (!signature) { setBindMsg('签名失败，请重试'); return }
+                            if (!currentAddress) { setBindMsg('未检测到钱包地址'); return }
+                            const normalized = currentAddress.toLowerCase()
+                            setBindMsg('已完成签名，正在提交绑定…')
+                            const ctrl = new AbortController()
+                            const t = setTimeout(() => ctrl.abort(), 15000)
+                            let res: Response | null = null
+                            try {
+                              res = await fetch('/api/auth/identity', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ provider: 'wallet', account_id: normalized, message, signature }),
+                                signal: ctrl.signal,
+                              })
+                            } catch (e: any) {
+                              if (e?.name === 'AbortError') {
+                                setBindMsg('网络超时，稍后重试或检查服务是否可用')
+                                return
+                              }
+                              setBindMsg('网络异常，稍后再试')
+                              return
+                            } finally {
+                              clearTimeout(t)
+                            }
+                            const j = await res.json().catch(() => ({}))
+                            if (!res.ok || !j.success) {
+                              if (res.status === 401) setBindMsg(j.error || '需要先登录后再绑定')
+                              else if (res.status === 409) setBindMsg(j.error || '该钱包已被其他账号绑定')
+                              else setBindMsg(j.error || '绑定失败')
+                            }
                             else {
                               setBindMsg('绑定成功');
                               setIdentities(prev => {
-                                if (prev.some(p => p.provider === 'wallet')) return prev
-                                return [...prev, { provider: 'wallet', account_id: address }]
+                                const idx = prev.findIndex(p => p.provider === 'wallet')
+                                if (idx >= 0) {
+                                  const next = [...prev]
+                                  next[idx] = { ...next[idx], account_id: normalized }
+                                  return next
+                                }
+                                return [...prev, { provider: 'wallet', account_id: normalized }]
                               })
+                              try { await fetch('/api/auth/session?update=1', { cache: 'no-store' }) } catch {}
                             }
+                          } catch {
+                            setBindMsg('绑定失败，请重试')
                           } finally {
+                            clearSignWatchdog()
                             setBinding(false)
                           }
                         }}
-                        className="px-3 py-1.5 text-xs rounded-lg border hover:bg-gray-50 disabled:opacity-50"
-                      >{isWalletBound ? '已绑定' : '绑定当前钱包'}</button>
+                        className="px-3 py-1.5 text-xs rounded-lg border hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >{binding ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /> 绑定中…</>) : (isWalletBound && walletIdentity?.account_id?.toLowerCase() === address?.toLowerCase() ? '已绑定' : '绑定当前钱包')}</button>
                     )}
-                    {bindMsg && <span className="text-xs text-gray-600">{bindMsg}</span>}
+                    <div className="flex flex-col gap-1 text-xs text-gray-600">
+                      {bindMsg && <span>{bindMsg}</span>}
+                      {!walletIdentity && (
+                        <span className="text-amber-600">未检测到已绑定的钱包身份。请连接钱包并点击上方按钮进行绑定。</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

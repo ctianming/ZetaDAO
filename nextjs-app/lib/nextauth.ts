@@ -22,20 +22,18 @@ async function findOrCreateUserIdentity(provider: string, accountId: string, pro
   }
   // Create base user row
   const baseUser = {
-    uid: undefined, // let DB default uuid via upsert? we inserted explicit
+    uid: undefined,
     username: null,
     wallet_address: provider === 'wallet' ? accountId : null,
     avatar_url: profile?.picture || profile?.avatar_url || null,
     bio: null,
   }
-  // Insert user (uid generated in DB migration ensures NOT NULL after generation)
   const { data: newUser, error: userErr } = await supabaseAdmin
     .from('users')
     .insert(baseUser)
     .select('uid,wallet_address')
     .single()
   if (userErr || !newUser?.uid) throw new Error('Failed to create user')
-  // Insert identity mapping
   await supabaseAdmin.from('user_identities').insert({ user_uid: newUser.uid, provider, account_id: accountId })
   return newUser.uid
 }
@@ -61,6 +59,9 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
       allowDangerousEmailAccountLinking: true,
+      httpOptions: {
+        timeout: parseInt(process.env.NEXTAUTH_GOOGLE_TIMEOUT_MS || '', 10) || 15000,
+      },
     }),
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID || '',
@@ -105,41 +106,6 @@ export const authOptions: NextAuthOptions = {
   return { id: uid as string, name: user.username || user.email, email: user.email }
       },
     }),
-  CredentialsProvider({
-      name: 'wallet',
-      credentials: {
-        address: { label: 'Address', type: 'text' },
-        message: { label: 'Message', type: 'text' },
-        signature: { label: 'Signature', type: 'text' },
-      },
-      async authorize(credentials) {
-        try {
-          const address = (credentials?.address || '').toLowerCase()
-          const message = credentials?.message || ''
-          const signature = credentials?.signature || ''
-          if (!address || !message || !signature) return null
-
-          // Verify nonce via cookie
-          const nonceCookie = cookies().get('wallet_nonce')?.value
-          if (!nonceCookie || !message.includes(nonceCookie)) return null
-
-          const ok = await verifyMessage({ address: address as Address, message, signature: signature as Hex })
-          if (!ok) return null
-
-          // Resolve uid via identity or create
-          let uid = await getUserUidByWallet(address)
-          let isNew = false
-          if (!uid) {
-            uid = await findOrCreateUserIdentity('wallet', address)
-            isNew = true
-          }
-          return { id: uid, name: address as string, email: undefined as any, newWalletUser: isNew, walletAddress: address } as any
-        } catch (e) {
-          console.error('wallet authorize error', e)
-          return null
-        }
-      },
-    }),
   ],
   callbacks: {
     async jwt({ token, user, account, profile }) {
@@ -168,7 +134,7 @@ export const authOptions: NextAuthOptions = {
       // Credentials user object has id = uid now
       if (user?.id && !token.uid) token.uid = user.id as string
       if ((user as any)?.walletAddress) token.walletAddress = (user as any).walletAddress
-      if ((user as any)?.newWalletUser) (token as any).newWalletUser = true
+  if ((user as any)?.newWalletUser) (token as any).newWalletUser = true
       if (!token.email && (user as any)?.email) token.email = (user as any).email
       if (!token.email && (profile as any)?.email) token.email = (profile as any).email
       return token

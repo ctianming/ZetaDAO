@@ -3,12 +3,14 @@
 import Link from 'next/link'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { signIn, signOut, useSession, getCsrfToken } from 'next-auth/react'
-import { useAccount, useSignMessage } from 'wagmi'
+import { useAccount, useChainId, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi'
 import { Menu, X, Wind, Star, Clock, Upload } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import UserAvatar from '@/components/common/UserAvatar'
+import { getZetaChainConfig } from '@/lib/web3'
+import { useToast } from '@/components/ui/Toast'
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -22,14 +24,26 @@ export default function Header() {
   const [resendCounter, setResendCounter] = useState(0)
   const [loginIdentifier, setLoginIdentifier] = useState('')
   const [mounted, setMounted] = useState(false)
-  const [walletLoginIntent, setWalletLoginIntent] = useState(false)
   const { data: session } = useSession()
   const xpTotal = (session as any)?.xpTotal as number | undefined
-  const isNewWalletUser = (session as any)?.newWalletUser
   const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
+  const { disconnectAsync } = useDisconnect()
   const { signMessageAsync } = useSignMessage()
   const { openConnectModal } = useConnectModal()
+  const { show } = useToast()
+  const { CHAIN_ID, CHAIN } = getZetaChainConfig()
   const wcOpenOnce = useRef(false)
+  const walletTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearWalletTimeout = useCallback(() => {
+    if (walletTimeoutRef.current) {
+      clearTimeout(walletTimeoutRef.current)
+      walletTimeoutRef.current = null
+    }
+  }, [walletTimeoutRef])
+  // decoupled: no wallet binding to user account anymore
+  const bindPendingWallet = useCallback(async () => true, [])
   const router = useRouter()
   const [miniQ, setMiniQ] = useState('')
 
@@ -52,57 +66,14 @@ export default function Header() {
       return () => { document.body.style.overflow = prev }
     }
   }, [loginOpen])
-  // 连接后自动继续钱包签名流程（不再依赖登录弹窗是否打开）
-  useEffect(() => {
-    const run = async () => {
-      if (!walletLoginIntent) return
-      if (!isConnected || !address) return
-      try {
-  setWalletLoading(true)
-        setLoginError('')
-        const nonceRes = await fetch('/api/auth/wallet/nonce', { cache: 'no-store' })
-        const { nonce } = await nonceRes.json()
-        const message = `Sign-in to ZetaDAO\n\nNonce: ${nonce}`
-        const signature = await signMessageAsync({ message })
-        const res = await signIn('credentials', { address, message, signature, redirect: false })
-        if (res?.error) setLoginError('钱包登录失败，请重试')
-        else {
-          setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false
-          // force refresh session so UI immediately reflects login state
-          try { await fetch('/api/auth/session?update=1', { cache: 'no-store' }) } catch {}
-          // 成功后检查是否未设置用户名，若未设置则跳转到引导页完成设置
-          try {
-            const u = await fetch(`/api/user?wallet=${address}`, { cache: 'no-store' })
-            const j = await u.json()
-            const hasUsername = !!j?.data?.user?.username
-            if (!hasUsername) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
-          } catch {}
-        }
-      } catch (e) {
-  const anyErr = e as { code?: number; message?: string }
-  const msg = String(anyErr?.message || '')
-  // 未授权/需要连接：提示并再次触发连接，等待用户授权后自动继续
-  if (anyErr?.code === 4100 || /authorized/i.test(msg)) {
-          setLoginOpen(false)
-          setTimeout(() => {
-            if (!wcOpenOnce.current) {
-              wcOpenOnce.current = true
-              openConnectModal?.()
-            }
-          }, 100)
-        } else {
-          setLoginError('钱包登录失败，请重试')
-        }
-      } finally {
-        setWalletLoading(false)
-      }
-    }
-    run()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletLoginIntent, isConnected, address])
+  // decoupled: remove auto wallet login-sign flow
 
   // 仅客户端渲染 Portal，避免 SSR/Hydration 问题
   useEffect(() => { setMounted(true) }, [])
+
+  // no wallet intent anymore
+
+  useEffect(() => () => clearWalletTimeout(), [clearWalletTimeout])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -132,6 +103,61 @@ export default function Header() {
   const userName = session?.user?.name || session?.user?.email || '用户'
   const [socialStats, setSocialStats] = useState<{followers:number; following:number; posts?:number; isFollowing:boolean} | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  // wallet connect/disconnect handlers (decoupled from auth)
+  const connectWalletAndVerify = useCallback(async () => {
+    try {
+      setLoginError('')
+      setWalletLoading(true)
+      if (!isConnected || !address) {
+        setTimeout(() => { if (!wcOpenOnce.current) { wcOpenOnce.current = true; openConnectModal?.() } }, 50)
+        setWalletLoading(false)
+        return
+      }
+      // Enforce ZetaChain network before signing
+      try {
+        const desired = CHAIN_ID
+        if (chainId !== desired) {
+          await switchChainAsync({ chainId: desired })
+        }
+      } catch (e: any) {
+        const code = e?.code
+        if (code === 4001) {
+          setLoginError('已取消切换网络，请先在钱包中切换至指定的 ZetaChain 网络后再重试')
+          setWalletLoading(false)
+          return
+        }
+        // 4902: 未添加链；其他错误：提示手动切换
+        setLoginError('请在钱包中切换至 ZetaChain 指定网络（测试网或主网），然后重试连接')
+        setWalletLoading(false)
+        return
+      }
+      const nonceRes = await fetch('/api/auth/wallet/nonce', { cache: 'no-store' })
+      const { nonce } = await nonceRes.json()
+      const message = `Connect wallet to ZetaDAO\n\nNonce: ${nonce}`
+      const signature = await signMessageAsync({ message })
+      const res = await fetch('/api/auth/wallet/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, message, signature }) })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j?.success) {
+        setLoginError(j?.error || '钱包连接验证失败')
+      }
+    } catch (e: any) {
+      const msg = String(e?.message || '')
+      if (/authorized/i.test(msg) || (e?.code === 4100)) {
+        setTimeout(() => { if (!wcOpenOnce.current) { wcOpenOnce.current = true; openConnectModal?.() } }, 100)
+      } else {
+        setLoginError('钱包连接失败，请重试')
+      }
+    } finally {
+      setWalletLoading(false)
+    }
+  }, [isConnected, address, openConnectModal, signMessageAsync, chainId, switchChainAsync])
+
+  const disconnectWallet = useCallback(async () => {
+    try {
+      await fetch('/api/auth/wallet/disconnect', { method: 'POST' })
+    } catch {}
+    try { await disconnectAsync() } catch {}
+  }, [disconnectAsync])
 
   useEffect(() => {
     const load = async () => {
@@ -165,6 +191,8 @@ export default function Header() {
     window.addEventListener('avatar-updated', onAvatarUpdated as any)
     return () => document.removeEventListener('click', onDocClick)
   }, [])
+
+  const ready = mounted
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -208,6 +236,35 @@ export default function Header() {
 
         {/* User */}
         <div className="flex items-center gap-3 relative">
+          {/* Network status badge */}
+          <div className="hidden md:flex items-center gap-2 mr-2">
+            {ready ? (
+              <>
+                <span className={`px-2 py-1 rounded-full text-xs border ${chainId === CHAIN_ID ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                  title={chainId === CHAIN_ID ? `已连接到 ${CHAIN.name}` : `当前网络不匹配，需 ${CHAIN.name}`}>
+                  {chainId === CHAIN_ID ? CHAIN.name : `需 ${CHAIN.name}`}
+                </span>
+                {isConnected && chainId !== CHAIN_ID && (
+                  <button
+                    className="text-xs underline"
+                    onClick={async () => {
+                      try {
+                        await switchChainAsync({ chainId: CHAIN_ID })
+                      } catch (e: any) {
+                        if (e?.code === 4001) {
+                          show('已取消切换网络', { type: 'error' })
+                        } else {
+                          show('请在钱包中手动切换到指定网络后重试', { type: 'error' })
+                        }
+                      }
+                    }}
+                  >切换</button>
+                )}
+              </>
+            ) : (
+              <span className="px-2 py-1 rounded-full text-xs border text-gray-400 bg-gray-50">网络</span>
+            )}
+          </div>
           {/* Quick actions (desktop) */}
           <div className="hidden md:flex items-center gap-5 mr-2">
             <Link href="/dynamics" className="group flex flex-col items-center justify-center text-[11px] text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-2 rounded-xl" aria-label="动态">
@@ -261,7 +318,7 @@ export default function Header() {
                     <UserAvatar url={avatarUrl || (session as any)?.avatarUrl} name={userName} size={56} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{userName}</div>
-                      {isNewWalletUser && <div className="text-[10px] text-amber-600 mt-1">首次钱包用户，请完善资料</div>}
+                      {/* decoupled: remove new wallet user hint */}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 text-center mb-4">
@@ -302,6 +359,22 @@ export default function Header() {
                       <span>每日签到 +5 XP</span>
                       <span className="text-xs text-gray-400">→</span>
                     </button>
+                    {/* wallet controls inside avatar menu (optional) */}
+                    <div className="flex items-center justify-between text-sm px-3 py-2 rounded-lg">
+                      {isConnected && address ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">钱包</span>
+                          <span className="font-mono text-xs">{address.slice(0,6)}…{address.slice(-4)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500">未连接钱包</span>
+                      )}
+                      {isConnected ? (
+                        <button onClick={disconnectWallet} className="text-xs underline">断开</button>
+                      ) : (
+                        <button onClick={connectWalletAndVerify} className="text-xs underline" disabled={walletLoading}>{walletLoading ? '连接中…' : '连接'}</button>
+                      )}
+                    </div>
                     <Link href="/profile" className="flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
                       <span>个人中心</span>
                       <span className="text-xs text-gray-400">→</span>
@@ -325,6 +398,23 @@ export default function Header() {
           ) : (
             <button onClick={() => { setLoginError(''); setRegisterSent(false); setRegEmail(''); setAuthTab('signin'); setLoginOpen(true) }} className="text-sm px-3 py-1.5 border rounded-lg hover:bg-gray-50">登录</button>
           )}
+
+          {/* 独立的钱包连接按钮（与登录解耦） */}
+          <div className="ml-2">
+            {ready ? (
+              isConnected && address ? (
+                <button onClick={disconnectWallet} className="text-xs px-3 py-1.5 border rounded-full hover:bg-gray-50 font-mono">
+                  {address.slice(0,6)}…{address.slice(-4)} · 断开
+                </button>
+              ) : (
+                <button onClick={connectWalletAndVerify} className="text-xs px-3 py-1.5 border rounded-full hover:bg-gray-50" disabled={walletLoading}>
+                  {walletLoading ? '连接中…' : '连接钱包'}
+                </button>
+              )
+            ) : (
+              <button className="text-xs px-3 py-1.5 border rounded-full text-transparent select-none">占位文本</button>
+            )}
+          </div>
           {mounted && loginOpen && createPortal(
             <div className="fixed inset-0 z-[9999]">
               <div className="absolute inset-0 bg-black/40" onClick={() => setLoginOpen(false)} />
@@ -340,6 +430,7 @@ export default function Header() {
                   {/* 左侧：登录 / 注册（两步） */}
                   <div className="p-6">
                     <div className="mb-4 text-lg font-medium">{authTab === 'signin' ? '登录' : '注册'}</div>
+                    {/* 已移除钱包绑定提示 */}
                     {loginError && <div className="text-red-600 text-xs mb-3">{loginError}</div>}
                     {authTab === 'signin' ? (
                       <form
@@ -351,8 +442,17 @@ export default function Header() {
                           setFormLoading(true)
                           setLoginError('')
                           const res = await signIn('password', { identifier, password, redirect: false })
-                          if (res?.error) setLoginError('账号或密码错误，或邮箱未验证')
-                          else setLoginOpen(false)
+                          if (res?.error) {
+                            setLoginError('账号或密码错误，或邮箱未验证')
+                            setFormLoading(false)
+                            return
+                          }
+                          const boundOk = await bindPendingWallet()
+                          if (!boundOk) {
+                            setFormLoading(false)
+                            return
+                          }
+                          setLoginOpen(false)
                           setFormLoading(false)
                         }}
                         className="space-y-3"
@@ -452,7 +552,7 @@ export default function Header() {
                     )}
                   </div>
 
-                  {/* 右侧：Google + 钱包登录 */}
+                  {/* 右侧：Google 登录（钱包登录已移除）*/}
                   <div className="p-6 bg-gray-50 border-l">
                     <div className="text-sm text-gray-600 mb-3">第三方快速登录</div>
                     <div className="space-y-3">
@@ -487,86 +587,9 @@ export default function Header() {
                       >
                         使用 Google 登录
                       </button>
-                      <button
-                        onClick={async () => {
-                          setLoginError('')
-                          setWalletLoginIntent(true)
-                          try {
-                            setWalletLoading(true)
-                            // 确保每次点击前都重置一次性防抖标记
-                            wcOpenOnce.current = false
-                            if (!isConnected || !address) {
-                              // 关闭本弹窗避免覆盖 RainbowKit；稍作延迟再打开，并避免重复打开
-                              setLoginOpen(false)
-                              setTimeout(() => {
-                                if (!wcOpenOnce.current) {
-                                  wcOpenOnce.current = true
-                                  openConnectModal?.()
-                                }
-                              }, 100)
-                              // 若 800ms 后仍未连接且仍在登录意图中，再尝试一次
-                              setTimeout(() => {
-                                if (!isConnected && walletLoginIntent && !wcOpenOnce.current) {
-                                  wcOpenOnce.current = true
-                                  openConnectModal?.()
-                                }
-                              }, 800)
-                              // 等待用户完成连接，再次自动继续
-                              setWalletLoading(false)
-                              return
-                            }
-                            // 已连接则直接继续（备用路径，通常由 effect 接管）
-                            const nonceRes = await fetch('/api/auth/wallet/nonce', { cache: 'no-store' })
-                            const { nonce } = await nonceRes.json()
-                            const message = `Sign-in to ZetaDAO\n\nNonce: ${nonce}`
-                            let signature: string
-                            try {
-                              signature = await signMessageAsync({ message })
-                            } catch (e: any) {
-                              const anyErr = e as { code?: number; message?: string }
-                              const msg = String(anyErr?.message || '')
-                              if (anyErr?.code === 4100 || /authorized/i.test(msg)) {
-                                setLoginOpen(false)
-                                setTimeout(() => {
-                                  if (!wcOpenOnce.current) {
-                                    wcOpenOnce.current = true
-                                    openConnectModal?.()
-                                  }
-                                }, 100)
-                                setWalletLoading(false)
-                                return
-                              }
-                              throw e
-                            }
-                            const res = await signIn('credentials', { address, message, signature, redirect: false })
-                            if (res?.error) setLoginError('钱包登录失败，请重试')
-                            else {
-                              setLoginOpen(false); setWalletLoginIntent(false); wcOpenOnce.current = false
-                              try { await fetch('/api/auth/session?update=1', { cache: 'no-store' }) } catch {}
-                              try {
-                                const u = await fetch(`/api/user?wallet=${address}`, { cache: 'no-store' })
-                                const j = await u.json()
-                                const hasUsername = !!j?.data?.user?.username
-                                if (!hasUsername) setTimeout(() => { window.location.assign('/auth/onboard') }, 50)
-                              } catch {}
-                            }
-                          } catch (e) {
-                            setLoginError('钱包登录失败，请重试')
-                          } finally {
-                            setWalletLoading(false)
-                          }
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-lg border hover:bg-white disabled:opacity-50"
-                        disabled={walletLoading}
-                      >
-                        使用钱包登录{walletLoading ? '中…' : ''}
-                      </button>
                     </div>
                     <div className="mt-6 text-center">
-                      <button onClick={() => { setWalletLoginIntent(false); wcOpenOnce.current = false; setLoginOpen(false) }} className="text-sm text-gray-600 hover:text-gray-800">取消</button>
-                      {isNewWalletUser && (
-                        <div className="mt-3 text-xs text-amber-600">首次使用该钱包？完成连接后将前往个人资料设置用户名。</div>
-                      )}
+                      <button onClick={() => { wcOpenOnce.current = false; setLoginOpen(false) }} className="text-sm text-gray-600 hover:text-gray-800">取消</button>
                     </div>
                   </div>
                 </div>
@@ -599,6 +622,33 @@ export default function Header() {
               </Link>
             ))}
             <Link href="/submit" className="text-sm font-medium transition-colors hover:text-primary-500" onClick={()=> setMobileMenuOpen(false)}>投稿</Link>
+            {/* Mobile: 网络状态与切换 */}
+            <div className="pt-2 flex items-center justify-between">
+              {ready ? (
+                <span className={`px-2 py-1 rounded-full text-xs border ${chainId === CHAIN_ID ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                  title={chainId === CHAIN_ID ? `已连接到 ${CHAIN.name}` : `当前网络不匹配，需 ${CHAIN.name}`}>
+                  {chainId === CHAIN_ID ? CHAIN.name : `需 ${CHAIN.name}`}
+                </span>
+              ) : (
+                <span className="px-2 py-1 rounded-full text-xs border text-gray-400 bg-gray-50">网络</span>
+              )}
+              {ready && isConnected && chainId !== CHAIN_ID && (
+                <button
+                  className="text-xs underline"
+                  onClick={async () => {
+                    try {
+                      await switchChainAsync({ chainId: CHAIN_ID })
+                    } catch (e: any) {
+                      if (e?.code === 4001) {
+                        show('已取消切换网络', { type: 'error' })
+                      } else {
+                        show('请在钱包中手动切换到指定网络后重试', { type: 'error' })
+                      }
+                    }
+                  }}
+                >切换</button>
+              )}
+            </div>
           </nav>
         </div>
       )}

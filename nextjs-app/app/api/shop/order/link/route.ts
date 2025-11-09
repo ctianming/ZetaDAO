@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/nextauth'
 import { supabaseAdmin } from '@/lib/db'
 import { createPublicClient, decodeEventLog, Hex, http } from 'viem'
 import { SHOP_ABI } from '@/lib/shop'
-import { zetachainAthensTestnet } from 'wagmi/chains'
+import { getZetaChainConfig } from '@/lib/web3'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions as any)
@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
   if (!order || order.buyer_uid !== uid) return NextResponse.json({ success: false, error: '订单不存在' }, { status: 404 })
   if (order.onchain_id) return NextResponse.json({ success: true, data: order })
 
-  const rpc = process.env.NEXT_PUBLIC_ZETA_RPC_URL || zetachainAthensTestnet.rpcUrls.default.http[0]
-  const client = createPublicClient({ chain: zetachainAthensTestnet, transport: http(rpc) })
+  const { CHAIN, RPC_URL } = getZetaChainConfig()
+  const client = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) })
   const receipt = await client.getTransactionReceipt({ hash: txHash as Hex }).catch(() => null)
   if (!receipt || receipt.status !== 'success') {
     return NextResponse.json({ success: false, error: '交易未成功或未确认' }, { status: 400 })
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   }
   if (!order.product_onchain_id && matchedProductId) updates.product_onchain_id = matchedProductId
   if (buyerAddress) updates.buyer_address = buyerAddress
-  if (!order.chain_id) updates.chain_id = zetachainAthensTestnet.id
+  if (!order.chain_id) updates.chain_id = CHAIN.id
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from('shop_orders')

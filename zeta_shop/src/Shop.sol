@@ -300,6 +300,13 @@ contract Shop {
     receive() external payable {}
 
     /// --------------------
+    /// Versioning
+    /// --------------------
+    function contractVersion() external pure returns (string memory) {
+        return "1.0.0";
+    }
+
+    /// --------------------
     /// Internal helpers
     /// --------------------
 

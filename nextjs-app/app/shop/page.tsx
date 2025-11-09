@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { ShopProduct } from '@/types'
 import Image from 'next/image'
-import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi'
 import { useToast } from '@/components/ui/Toast'
 import { SHOP_ABI, SHOP_CONTRACT_ADDRESS } from '@/lib/shop'
+import { getZetaChainConfig } from '@/lib/web3'
 import { Hex, formatUnits, decodeEventLog } from 'viem'
 
 export default function ShopPage() {
@@ -17,7 +18,10 @@ export default function ShopPage() {
   const [quantity, setQuantity] = useState(1)
   const [addressInline, setAddressInline] = useState({ contact_name: '', phone: '', address: '' })
   const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
   const { show } = useToast()
+  const { CHAIN_ID, CHAIN } = getZetaChainConfig()
 
   useEffect(() => {
     const load = async () => {
@@ -46,7 +50,7 @@ export default function ShopPage() {
 
   const startPurchase = async () => {
     if (!selected) return
-    if (!isConnected || !address) { show('请先连接钱包并登录', { type: 'error' }); return }
+    if (!isConnected || !address) { show('请先连接钱包', { type: 'error' }); return }
     if (!addressInline.contact_name || !addressInline.phone || !addressInline.address) {
       show('请填写收货信息', { type: 'error' }); return
     }
@@ -54,6 +58,21 @@ export default function ShopPage() {
 
     setBuying(true)
     try {
+      // Enforce network before any on-chain interactions
+      const desired = CHAIN_ID
+      if (chainId !== desired) {
+        try {
+          await switchChainAsync({ chainId: desired })
+        } catch (e: any) {
+          if (e?.code === 4001) {
+            show('已取消切换网络，请在钱包中切换至指定 ZetaChain 网络后重试', { type: 'error' })
+          } else {
+            show('请先在钱包中切换至指定 ZetaChain 网络', { type: 'error' })
+          }
+          setBuying(false)
+          return
+        }
+      }
       // 1) Create order off-chain
       const res = await fetch('/api/shop/order', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -192,6 +211,22 @@ export default function ShopPage() {
           <div className="absolute inset-0 bg-black/40" onClick={()=>!buying && setSelected(null)} />
           <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] max-w-[92vw] rounded-2xl bg-white shadow-2xl border p-6">
             <div className="text-lg font-semibold mb-3">购买 {selected.name}</div>
+            {/* 网络提示与一键切换 */}
+            {isConnected && chainId !== CHAIN_ID && (
+              <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                <div className="text-xs">当前网络不匹配，需 {CHAIN.name}</div>
+                <button
+                  className="text-xs underline"
+                  onClick={async () => {
+                    try { await switchChainAsync({ chainId: CHAIN_ID }) }
+                    catch (e:any) {
+                      if (e?.code === 4001) show('已取消切换网络', { type: 'error' })
+                      else show('请先在钱包中切换至指定 ZetaChain 网络', { type: 'error' })
+                    }
+                  }}
+                >切换</button>
+              </div>
+            )}
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <label className="w-16 text-sm text-gray-600">数量</label>

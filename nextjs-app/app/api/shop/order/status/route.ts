@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/nextauth'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdmin } from '@/lib/auth'
+import { isAdminFromRequest } from '@/lib/auth'
 import { SHOP_ABI, SHOP_ORDER_STATUS_CODE } from '@/lib/shop'
 import { createPublicClient, decodeEventLog, Hex, http } from 'viem'
-import { zetachainAthensTestnet } from 'wagmi/chains'
+import { getZetaChainConfig } from '@/lib/web3'
 
 const STATUS_META = {
   shipped: { column: 'shipped_at', status: 'shipped' },
@@ -21,8 +21,7 @@ export async function POST(req: NextRequest) {
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
-  const adminWallet = req.headers.get('x-wallet-address') || undefined
-  if (!isAdmin(adminWallet)) {
+  if (!isAdminFromRequest(req)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -56,8 +55,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: '订单缺少链上编号' }, { status: 409 })
   }
 
-  const rpc = process.env.NEXT_PUBLIC_ZETA_RPC_URL || zetachainAthensTestnet.rpcUrls.default.http[0]
-  const client = createPublicClient({ chain: zetachainAthensTestnet, transport: http(rpc) })
+  const { CHAIN, RPC_URL } = getZetaChainConfig()
+  const client = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) })
   const receipt = await client.getTransactionReceipt({ hash: txHash as Hex }).catch(() => null)
   if (!receipt || receipt.status !== 'success') {
     return NextResponse.json({ success: false, error: '交易未成功或未确认' }, { status: 400 })

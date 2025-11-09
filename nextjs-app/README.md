@@ -2,6 +2,13 @@
 
 基于 Next.js 14 构建的 ZetaDAO 社区门户网站，支持投稿系统和管理员审核功能。
 
+> 重要更新（安全与链上体验）
+> 
+> - 登录已与“钱包连接”彻底解耦：登录使用账号体系（next-auth），链上操作单独通过钱包完成。
+> - 管理员鉴权改为“仅基于管理员钱包地址白名单”：服务端从请求头 `X-Admin-Wallet` 或查询参数 `adminWallet` 提取地址进行校验；为兼容旧逻辑，保留已连接钱包 Cookie 作为可选回退。
+> - 全站统一使用 ZetaChain（可配置主网/测试网），在发起任意链上操作前会提示并尝试切换到目标网络。
+> - 钱包体验优化：支持 MetaMask、OKX（注入钱包）与 WalletConnect（需配置 projectId）。
+
 ## ✨ 特性
 
 - 🎨 **现代化 UI**: 使用 Tailwind CSS + shadcn/ui 构建精美界面
@@ -62,8 +69,12 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ADMIN_WALLETS=0x1234...,0x5678...
 
 # ZetaChain配置
-NEXT_PUBLIC_ZETA_CHAIN_ID=7001
+NEXT_PUBLIC_ZETA_CHAIN_ID=7001                           # 7001 测试网 Athens，7000 主网
 NEXT_PUBLIC_ZETA_RPC_URL=https://zetachain-athens-evm.blockpi.network/v1/rpc/public
+NEXT_PUBLIC_ZETA_EXPLORER_BASE=https://athens.explorer.zetachain.com  # 可选，默认使用 wagmi 内置配置
+
+# RainbowKit / WalletConnect（用于移动钱包扫码连接）
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your-wc-project-id
 
 # 腾讯云SES（用于邮箱验证码）
 # 在腾讯云控制台创建并审核通过邮件模板，记录模板ID
@@ -191,18 +202,18 @@ nextjs-app/
 
 ## 🚀 功能说明
 
-### 用户功能
+### 用户功能（登录与钱包解耦）
 
 1. **浏览内容**: 查看文章、视频、活动、大使名录
-2. **连接钱包**: 使用 MetaMask 等钱包登录
+2. **连接钱包**: 仅用于链上操作（非登录），在 Header 中点击“连接钱包”并完成签名后，后台会设置 httpOnly Cookie 以识别管理员
 3. **投稿**: 提交文章、视频或活动内容
 4. **查看投稿状态**: 跟踪自己的投稿审核状态
 
-### 管理员功能
+### 管理员功能（Cookie 鉴权）
 
-1. **审核投稿**: 查看待审核的投稿列表
+1. **审核投稿**: 查看待审核的投稿列表（需先在 Header 连接管理员钱包并签名）
 2. **批准/拒绝**: 审核并发布或拒绝投稿
-3. **链上记录**: 审核通过后可选择记录到区块链
+3. **链上记录**: 发起链上写入前会自动校验并提示切换到配置的 ZetaChain 网络
 4. **内容管理**: 编辑或删除已发布内容
 
 ## 📝 使用指南
@@ -256,6 +267,55 @@ vercel --prod
 ```
 
 记得在 Vercel 项目设置中配置环境变量！
+
+## 🔗 链路与网络（要点）
+
+- 单一链配置：在 `lib/web3.ts` 集中维护 ZetaChain 网络（主网/测试网），前后端统一读取。
+- 客户端网络强制：在 Header、商店购买页、管理员商店页等发起链上交易前强制提示并尝试切换网络。
+- 管理员鉴权：服务端通过 `isAdminFromRequest` 校验管理员钱包地址。地址来源优先顺序为：请求头 `X-Admin-Wallet` → 查询参数 `adminWallet` → 兼容回退的 `connected_wallet` Cookie。
+- Explorer 链接：自动根据当前配置指向对应链的浏览器（可通过 `NEXT_PUBLIC_ZETA_EXPLORER_BASE` 覆盖）。
+
+## 🛍️ 商店管理（Shop）
+
+商店管理入口位于：`/admin` → 卡片“商店管理” → `/admin/shop`
+
+### 功能概览
+
+- 商品管理：创建、编辑、删除、上下架（`status: active/inactive`），价格以 `wei` 存储（`price_wei`）。
+- 订单管理：查看订单列表、导出 CSV、链上状态操作（发货/完成/取消/退款）。
+- 合约联动：在执行链上写入前，会强制校验并引导切换至配置的 ZetaChain 网络。
+
+### 关键环境变量
+
+- `NEXT_PUBLIC_SHOP_CONTRACT_ADDRESS`：商店合约地址（用于管理员链上操作）。
+- `NEXT_PUBLIC_SHOP_CHAIN_ID`（可选）：优先用于商店链 ID；未配置时回退至 `NEXT_PUBLIC_ZETA_CHAIN_ID`。
+
+### 商品字段（数据库 `shop_products`）
+
+- `slug`（唯一）、`name`、`description`、`image_url`
+- `price_wei`（整型字符串）、`stock`（库存）
+- `status`（`active`/`inactive`）
+- `metadata_uri`（商品元数据地址，指向站内代理 URL）
+- `onchain_id`（链上商品 ID，可选）
+
+### 元数据自动生成
+
+- API：`POST /api/shop/products/metadata`
+    - 请求体：`{ id?: string; slug?: string; attributes?: Record<string,string|number>; force?: boolean }`
+    - 行为：根据商品字段构造标准 JSON 元数据，写入 Supabase Storage，并将可访问的代理 URL 回写到 `metadata_uri`。
+    - 返回：`{ success, metadata_uri, path, metadata }`
+- 访问：为兼容私有存储桶，所有资源通过站内代理 `GET /api/storage/file?path=...` 提供访问链接。
+- 管理页面：
+    - 商品列表中提供“生成/重新生成”按钮。
+    - 商品表单提供 `metadata_uri` 输入框与“自动生成”按钮。
+
+### 管理端鉴权约定
+
+- 所有管理员 API 与导出/状态更新操作，都需在请求中携带管理员钱包地址：
+    - 请求头：`X-Admin-Wallet: <address>`
+    - 或查询参数：`?adminWallet=<address>`
+    - 服务器将与白名单 `ADMIN_WALLETS` 校验匹配。
+    - 仍保留已连接钱包 Cookie 作为兼容性回退。
 
 ## � 邮件模板
 

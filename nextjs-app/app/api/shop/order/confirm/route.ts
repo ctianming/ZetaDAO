@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/nextauth'
 import { supabaseAdmin } from '@/lib/db'
 import { createPublicClient, http, decodeEventLog, Hex, parseAbi } from 'viem'
-import { zetachainAthensTestnet } from 'wagmi/chains'
+import { getZetaChainConfig } from '@/lib/web3'
 
 const shopAbi = parseAbi([
   'event OrderPaid(uint256 orderId, address indexed buyer, uint256 amount)',
@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: '订单缺少链上编号' }, { status: 400 })
   }
 
-  const rpc = process.env.NEXT_PUBLIC_ZETA_RPC_URL || zetachainAthensTestnet.rpcUrls.default.http[0]
-  const client = createPublicClient({ chain: zetachainAthensTestnet, transport: http(rpc) })
+  const { CHAIN, RPC_URL } = getZetaChainConfig()
+  const client = createPublicClient({ chain: CHAIN, transport: http(RPC_URL) })
   const receipt = await client.getTransactionReceipt({ hash: txHash as Hex }).catch(() => null)
   if (!receipt || receipt.status !== 'success') {
     return NextResponse.json({ success: false, error: '交易未成功或未确认' }, { status: 400 })
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   const updates: Record<string, any> = {
     status: 'paid',
     buyer_address: buyer || order.buyer_address || null,
-    chain_id: zetachainAthensTestnet.id,
+    chain_id: CHAIN.id,
     last_event_tx_hash: txHash,
     paid_tx_hash: txHash,
     updated_at: new Date().toISOString(),
