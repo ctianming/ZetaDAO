@@ -1,7 +1,5 @@
 # ZetaDAO 社区门户阶段性进展与成果汇报（截至 2025-11-07）
 
-> 本报告用于向需求方/拨款方汇报当前阶段完成的工作成果、技术实现、创新亮点与后续规划。仓库：`ZetaDAO/nextjs-app`。
-
 ## 一、总体概述
 
 - 交付对象：面向 ZetaChain 社区的内容与电商一体化门户（投稿/审核/发布 + 商店链上支付与状态同步）。
@@ -54,7 +52,7 @@
 - 新增：独立“连接钱包并验证”流程（Header），签名挑战 + httpOnly Cookie。
 - 新增：网络状态徽标（桌面/移动端），不匹配一键切换。
 - 新增：商店购买弹窗的网络提示与一键切换。
-- 改造：Admin 全链路切换为 Cookie 基于的管理员校验（`isAdminFromRequest`）。
+- 改造：Admin 全链路切换为 Cookie 基于的管理员校验（`isAdminFromSession`），移除自定义请求头/查询参数回退。
 - 改造：商店三条关键 API（link/confirm/status）均采用服务器侧事件验真与集中链配置。
 - 文档：README/SUMMARY 补充链网配置、Cookie 鉴权、WalletConnect projectId。
 - 可靠性：修复 Header 初次水合的文本不一致问题（SSR → CSR 占位渲染）。

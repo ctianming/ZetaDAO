@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 export default function OnboardPage() {
-  const { data: session, status } = useSession()
+  const { data: session } = useSession()
   const uid = (session as any)?.uid as string | undefined
   const [step, setStep] = useState<'form' | 'verify' | 'done'>('form')
   const [username, setUsername] = useState('')

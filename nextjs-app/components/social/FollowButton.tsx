@@ -1,20 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 export default function FollowButton({ targetUid }: { targetUid: string }) {
   const [loading, setLoading] = useState(false)
   const [isFollowing, setIsFollowing] = useState<boolean | null>(null)
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/social/stats?uid=${targetUid}`, { cache: 'no-store' })
       const j = await res.json()
       if (j?.success) setIsFollowing(!!j.data?.isFollowing)
     } catch {}
-  }
+  }, [targetUid])
 
-  useEffect(() => { refresh() }, [targetUid])
+  useEffect(() => { refresh() }, [refresh])
 
   const toggle = async () => {
     if (loading || isFollowing === null) return

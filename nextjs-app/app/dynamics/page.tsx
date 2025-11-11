@@ -1,9 +1,11 @@
 "use client"
 import Header from '@/components/layout/Header'
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import Image from 'next/image'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { AUTO_REFRESH_ENABLED, SWR_REFRESH_MS, SWR_REVALIDATE_ON_FOCUS, SWR_REVALIDATE_ON_RECONNECT } from '@/lib/config'
 
 export default function DynamicsPage() {
   const { data: session } = useSession()
@@ -51,8 +53,8 @@ function Composer() {
       {images.length>0 && (
         <div className="mt-3 grid grid-cols-3 gap-2">
           {images.map((url, idx) => (
-            <div key={idx} className="relative">
-              <img src={url} alt="img" className="w-full h-24 object-cover rounded-lg border" />
+            <div key={idx} className="relative w-full h-24 rounded-lg border overflow-hidden">
+              <Image src={url} alt="img" fill unoptimized className="object-cover" />
               <button className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-black/60 text-white text-xs" onClick={()=> setImages(prev => prev.filter((_,i)=>i!==idx))}>×</button>
             </div>
           ))}
@@ -99,24 +101,32 @@ function FeedList() {
   const [commentInput, setCommentInput] = useState<Record<string, string>>({})
   const [lightbox, setLightbox] = useState<{ urls: string[], index: number } | null>(null)
 
-  const load = async (reset = false) => {
-    if (loading && !reset) return
+  // Refs to avoid unstable dependencies and stale closures
+  const loadingRef = useRef(false)
+  const cursorRef = useRef<string | null>(null)
+  useEffect(() => { loadingRef.current = loading }, [loading])
+  useEffect(() => { cursorRef.current = cursor }, [cursor])
+
+  const load = useCallback(async (reset = false) => {
+    if (loadingRef.current && !reset) return
+    loadingRef.current = true
     setLoading(true)
     try {
       const params = new URLSearchParams({ limit: '10' })
       if (uid) params.set('uid', uid)
       if (!uid && mode === 'following') params.set('following', '1')
-      if (!reset && cursor) params.set('before', cursor)
+      const before = !reset ? cursorRef.current : null
+      if (before) params.set('before', before)
       const res = await fetch(`/api/social/posts?${params.toString()}`, { cache: 'no-store' })
       const j = await res.json().catch(() => null)
       if (j?.success) {
-        const newItems = reset ? j.items : [...items, ...j.items]
-        setItems(newItems)
+        setItems(prev => (reset ? j.items : [...prev, ...j.items]))
         setCursor(j.nextCursor || null)
         setHasMore(!!j.hasMore)
         setProfiles(prev => ({ ...prev, ...(j.profiles || {}) }))
-        const ids = newItems.map((it: any) => it.id)
-        if (ids.length > 0) {
+        // Fallback: fetch likes for the first page or when reset; for pagination, compute after state update
+        const ids = (reset ? j.items : undefined)?.map((it: any) => it.id)
+        if (Array.isArray(ids) && ids.length > 0) {
           const res2 = await fetch(`/api/social/likes?ids=${ids.join(',')}`, { cache: 'no-store' })
           const j2 = await res2.json().catch(() => null)
           if (j2?.success) {
@@ -126,16 +136,44 @@ function FeedList() {
         }
       }
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
-  }
+  }, [uid, mode])
 
-  useEffect(() => { load(true) }, [uid, mode])
+  // Initial/param changes refresh
+  useEffect(() => { load(true) }, [uid, mode, load])
+  // External refresh trigger
   useEffect(() => {
     const h = () => load(true)
     window.addEventListener('feed:refresh', h)
     return () => window.removeEventListener('feed:refresh', h)
-  }, [])
+  }, [load])
+
+  // 全局自动刷新（基于配置，可选开启）+ 聚焦/网络重连再验证
+  useEffect(() => {
+    let timer: any
+    if (AUTO_REFRESH_ENABLED && SWR_REFRESH_MS > 0) {
+      timer = setInterval(() => load(true), SWR_REFRESH_MS)
+    }
+    const onVisibility = () => {
+      if (SWR_REVALIDATE_ON_FOCUS && document.visibilityState === 'visible' && AUTO_REFRESH_ENABLED) {
+        load(true)
+      }
+    }
+    const onOnline = () => {
+      if (SWR_REVALIDATE_ON_RECONNECT && AUTO_REFRESH_ENABLED) {
+        load(true)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('online', onOnline)
+    return () => {
+      if (timer) clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [uid, mode, load])
 
   return (
     <div className="space-y-3">
@@ -160,7 +198,9 @@ function FeedList() {
           <div className="flex items-center justify-between mb-1">
             <a href={`/u/${it.user_uid}`} className="flex items-center gap-2 group">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} className="w-8 h-8 rounded-full border object-cover" />
+                <div className="w-8 h-8 rounded-full border overflow-hidden relative">
+                  <Image src={avatarUrl} alt={displayName} fill unoptimized className="object-cover" />
+                </div>
               ) : (
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center text-xs font-semibold">
                   {displayName.slice(0,1)}
@@ -174,7 +214,9 @@ function FeedList() {
           {Array.isArray(it.images) && it.images.length>0 && (
             <div className="mt-2 grid grid-cols-3 gap-2">
               {it.images.map((url:string, idx:number) => (
-                <img key={idx} src={url} alt="img" className="w-full h-28 object-cover rounded-lg border cursor-zoom-in" onClick={()=> setLightbox({ urls: it.images, index: idx })} />
+                <div key={idx} className="relative w-full h-28 rounded-lg border overflow-hidden cursor-zoom-in" onClick={()=> setLightbox({ urls: it.images, index: idx })}>
+                  <Image src={url} alt="img" fill unoptimized className="object-cover" />
+                </div>
               ))}
             </div>
           )}
@@ -272,7 +314,9 @@ function FeedList() {
       {/* Lightbox */}
       {lightbox && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={()=> setLightbox(null)}>
-          <img src={lightbox.urls[lightbox.index]} alt="preview" className="max-w-[90vw] max-h-[85vh] object-contain" />
+          <div className="relative max-w-[90vw] max-h-[85vh] w-auto h-auto">
+            <Image src={lightbox.urls[lightbox.index]} alt="preview" width={1200} height={800} unoptimized className="object-contain w-full h-full" />
+          </div>
         </div>
       )}
     </div>

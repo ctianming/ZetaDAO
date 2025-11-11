@@ -1,4 +1,6 @@
 "use client"
+// Removed unused Header import
+import NextImage from 'next/image'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
 
@@ -410,7 +412,9 @@ export default function AvatarEditor({ avatarUrl, username, isSelf, size = 64, c
                   {thumbUrl && (
                     <div className="mt-3 flex items-center gap-3">
                       <div className="text-xs text-gray-600 w-12">预览</div>
-                      <img src={thumbUrl} alt="缩略预览" className="w-16 h-16 rounded-full border object-cover" />
+                      <div className="relative w-16 h-16 rounded-full border overflow-hidden">
+                        <NextImage src={thumbUrl} alt="缩略预览" fill unoptimized className="object-cover" />
+                      </div>
                     </div>
                   )}
                 </div>

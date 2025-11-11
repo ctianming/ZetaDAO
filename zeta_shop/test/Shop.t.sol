@@ -91,7 +91,7 @@ contract ShopTest is Test {
         assertEq(product.stock, 1, "stock restored after refund");
     }
 
-    function testOnlyOwnerCanWithdraw() public {
+    function testOnlyOwnerCanWithdrawAndRevenueFlow() public {
         uint256 productId = _createProduct(1 ether, 1);
         vm.deal(buyer, 2 ether);
         vm.prank(buyer);
@@ -99,13 +99,25 @@ contract ShopTest is Test {
         vm.prank(buyer);
         shop.payOrder{value: 1 ether}(orderId);
 
+        // Non-owner cannot use withdraw
         vm.expectRevert(Shop.NotOwner.selector);
         vm.prank(buyer);
         shop.withdraw(payable(buyer), 1 ether);
 
+        // Owner withdraw (legacy) cannot take pending revenue
         vm.prank(owner);
         shop.withdraw(payable(owner), 0);
-        assertEq(address(shop).balance, 0);
+        // balance still equals total pending
+        assertEq(address(shop).balance, 1 ether, "pending remains");
+
+        // Owner should use withdrawRevenue to distribute
+        uint256 balBeforeA = address(shop.revenueAddrA()).balance;
+        uint256 balBeforeB = address(shop.revenueAddrB()).balance;
+        vm.prank(owner);
+        shop.withdrawRevenue();
+        assertEq(address(shop).balance, 0, "treasury drained after revenue withdraw");
+        assertEq(address(shop.revenueAddrA()).balance, balBeforeA + 0.2 ether);
+        assertEq(address(shop.revenueAddrB()).balance, balBeforeB + 0.8 ether);
     }
 
     function testUpdateOrderMetadataAuthorized() public {
@@ -285,13 +297,86 @@ contract ShopTest is Test {
     }
 
     function testContractVersion() public {
-        // sanity check version string exists
-        // We cannot call pure view returning string via interface easily in foundry's assert,
-        // but we can compare hash for stability.
         (bool ok, bytes memory data) = address(shop).staticcall(abi.encodeWithSignature("contractVersion()"));
         assertTrue(ok, "version call");
         string memory ver = abi.decode(data, (string));
-        assertEq(keccak256(bytes(ver)), keccak256(bytes("1.0.0")), "version");
+        assertEq(ver, "1.2.0", "version should be 1.2.0");
+    }
+
+    function testRevenueDefaultConfig() public {
+        (address a, address b, uint16 shareA, uint16 shareB) = shop.getRevenueConfig();
+        assertEq(shareA, 2000, "default shareA 20%");
+        assertEq(shareB, 8000, "default shareB 80%");
+        assertTrue(a != address(0) && b != address(0), "addresses set");
+    }
+
+    function testRevenueAccrualAndWithdraw() public {
+        uint256 productId = _createProduct(1 ether, 2);
+        vm.deal(buyer, 5 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32("meta"));
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+        // pending shares reflect 20/80 split
+        assertEq(shop.pendingShareA(), 0.2 ether, "pending A");
+        assertEq(shop.pendingShareB(), 0.8 ether, "pending B");
+        uint256 balBeforeA = address(shop.revenueAddrA()).balance;
+        uint256 balBeforeB = address(shop.revenueAddrB()).balance;
+        vm.prank(owner);
+        shop.withdrawRevenue();
+        assertEq(shop.pendingShareA(), 0, "pending A zero");
+        assertEq(shop.pendingShareB(), 0, "pending B zero");
+        assertEq(address(shop.revenueAddrA()).balance, balBeforeA + 0.2 ether, "addrA received");
+        assertEq(address(shop.revenueAddrB()).balance, balBeforeB + 0.8 ether, "addrB received");
+    }
+
+    function testRevenueConfigCannotChangeWhilePending() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 2 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+        vm.prank(owner);
+        vm.expectRevert(Shop.RevenuePending.selector);
+        shop.setRevenueConfig(address(0x1), address(0x2), 3000);
+    }
+
+    function testRevenueConfigUpdate() public {
+        // withdraw any pending first (none initially)
+        vm.prank(owner);
+        shop.setRevenueConfig(address(0xAAA1), address(0xBBB2), 2500); // 25% / 75%
+        (address a, address b, uint16 shareA, uint16 shareB) = shop.getRevenueConfig();
+        assertEq(a, address(0xAAA1), "addrA updated");
+        assertEq(b, address(0xBBB2), "addrB updated");
+        assertEq(shareA, 2500, "shareA 25%");
+        assertEq(shareB, 7500, "shareB 75%");
+    }
+
+    function testRevenueRefundRollsBackPending() public {
+        uint256 productId = _createProduct(1 ether, 1);
+        vm.deal(buyer, 2 ether);
+        vm.prank(buyer);
+        uint256 orderId = shop.createOrder(productId, 1, bytes32(0));
+        vm.prank(buyer);
+        shop.payOrder{value: 1 ether}(orderId);
+        assertEq(shop.pendingShareA(), 0.2 ether, "pending A before refund");
+        vm.prank(owner);
+        shop.refundOrder(orderId, bytes32("refund"));
+        assertEq(shop.pendingShareA(), 0, "pending A after refund");
+        assertEq(shop.pendingShareB(), 0, "pending B after refund");
+    }
+
+    function testRevenueInvalidConfig() public {
+        vm.prank(owner);
+        vm.expectRevert(Shop.InvalidRevenueConfig.selector);
+        shop.setRevenueConfig(address(0), address(0x1234), 1000);
+        vm.prank(owner);
+        vm.expectRevert(Shop.InvalidRevenueConfig.selector);
+        shop.setRevenueConfig(address(0x1234), address(0), 1000);
+        vm.prank(owner);
+        vm.expectRevert(Shop.InvalidRevenueConfig.selector);
+        shop.setRevenueConfig(address(0x1234), address(0x5678), 10001); // shareA > 10000
     }
 
     function testTransferOwnership() public {
@@ -303,18 +388,29 @@ contract ShopTest is Test {
         vm.prank(buyer);
         shop.payOrder{value: 1 ether}(orderId);
 
+        // Pending revenue should exist (1 ether split 20/80)
+        assertEq(shop.pendingShareA(), 0.2 ether, "pending A before transfer");
+        assertEq(shop.pendingShareB(), 0.8 ether, "pending B before transfer");
+
         // transfer ownership to new manager
         vm.prank(owner);
         shop.transferOwnership(manager);
 
+        // old owner cannot withdraw
         vm.prank(owner);
         vm.expectRevert(Shop.NotOwner.selector);
         shop.withdraw(payable(owner), 0);
 
-        // new owner can withdraw
+        // new owner withdrawRevenue distributes funds
+        uint256 balBeforeA = address(shop.revenueAddrA()).balance;
+        uint256 balBeforeB = address(shop.revenueAddrB()).balance;
         vm.prank(manager);
-        shop.withdraw(payable(manager), 0);
-        assertEq(address(shop).balance, 0);
+        shop.withdrawRevenue();
+        assertEq(address(shop).balance, 0, "treasury empty after distribution");
+        assertEq(address(shop.revenueAddrA()).balance, balBeforeA + 0.2 ether, "addrA received");
+        assertEq(address(shop.revenueAddrB()).balance, balBeforeB + 0.8 ether, "addrB received");
+        assertEq(shop.pendingShareA(), 0, "pending A cleared");
+        assertEq(shop.pendingShareB(), 0, "pending B cleared");
     }
 
     function testNextIdsIncrement() public {

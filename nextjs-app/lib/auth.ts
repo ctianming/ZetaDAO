@@ -1,59 +1,75 @@
-// Admin wallets configured via env; used directly for authorization.
+// Session-only admin auth utilities (legacy header/query method removed).
+// Configure a comma-separated list of admin wallet addresses in ADMIN_WALLETS.
 export const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || '')
   .split(',')
-  .map(addr => addr.trim().toLowerCase())
+  .map(a => a.trim().toLowerCase())
   .filter(Boolean)
 
+const ADMIN_WALLETS_SET = new Set(ADMIN_WALLETS)
+
 export function isAdmin(address: string | undefined): boolean {
-  if (!address) return false
-  return ADMIN_WALLETS.includes(address.toLowerCase())
+  return !!(address && ADMIN_WALLETS_SET.has(address.toLowerCase()))
 }
 
 export function requireAdmin(address: string | undefined): void {
-  if (!isAdmin(address)) {
-    throw new Error('Unauthorized: Admin access required')
-  }
+  if (!isAdmin(address)) throw new Error('Unauthorized: Admin access required')
 }
 
-// Extract admin wallet from request without cookie requirement.
-// Priority order:
-// 1. X-Admin-Wallet header
-// 2. query param ?adminWallet=
-// 3. legacy connected_wallet cookie (optional fallback)
-export function getAdminWalletFromRequest(req: Request | { headers: Headers; cookies?: any }): string | undefined {
+// ---- Admin session (signed cookie) ----
+import crypto from 'crypto'
+const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || process.env.SIGNING_KEY || 'dev-admin-secret'
+const ADMIN_SESSION_COOKIE = 'admin_session'
+
+function b64url(input: string | Buffer) {
+  return Buffer.from(input).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+}
+function b64urlDecode(str: string) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/')
+  const pad = str.length % 4
+  if (pad) str += '='.repeat(4 - pad)
+  return Buffer.from(str, 'base64').toString('utf8')
+}
+
+export function createAdminSessionToken(address: string, ttlSec = 3600) {
+  const payload = { w: address.toLowerCase(), exp: Math.floor(Date.now() / 1000) + ttlSec, jti: crypto.randomUUID() }
+  const body = b64url(JSON.stringify(payload))
+  const sig = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(body).digest('base64url')
+  return `v1.${body}.${sig}`
+}
+
+export function verifyAdminSessionToken(token: string | undefined) {
+  if (!token) return null as string | null
+  const [ver, body, sig] = token.split('.')
+  if (ver !== 'v1' || !body || !sig) return null
+  const expected = crypto.createHmac('sha256', ADMIN_SESSION_SECRET).update(body).digest('base64url')
+  if (expected.length !== sig.length) return null
+  try { crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)) } catch { return null }
+  let payload: any
+  try { payload = JSON.parse(b64urlDecode(body)) } catch { return null }
+  if (!payload?.w || !payload?.exp) return null
+  if (payload.exp < Math.floor(Date.now() / 1000)) return null
+  return String(payload.w)
+}
+
+export function getAdminWalletFromSession(req: Request | { headers: Headers; cookies?: any }) {
   try {
     const anyReq = req as any
-    const queryUrl = anyReq?.url ? new URL(anyReq.url, 'http://local') : null
-    const headerVal = anyReq?.headers?.get?.('x-admin-wallet') || anyReq?.headers?.get?.('X-Admin-Wallet')
-    if (headerVal) return String(headerVal).toLowerCase()
-    const qp = queryUrl?.searchParams?.get('adminWallet')
-    if (qp) return qp.toLowerCase()
-    // Optional fallback to cookie for backward compatibility
-    const cookieStore = anyReq?.cookies
-    if (cookieStore && typeof cookieStore.get === 'function') {
-      const v = cookieStore.get('connected_wallet')?.value
-      return v ? String(v).toLowerCase() : undefined
-    }
-    const cookieHeader = anyReq?.headers?.get?.('cookie') || ''
-    if (cookieHeader) {
-      const parts = cookieHeader.split(';')
-      for (const p of parts) {
-        const [k, ...rest] = p.trim().split('=')
-        if (k === 'connected_wallet') {
-          return decodeURIComponent(rest.join('=')).toLowerCase()
-        }
+    let token: string | undefined
+    if (anyReq?.cookies?.get?.(ADMIN_SESSION_COOKIE)?.value) token = anyReq.cookies.get(ADMIN_SESSION_COOKIE).value
+    if (!token) {
+      const cookieHeader: string | undefined = anyReq?.headers?.get?.('cookie')
+      if (cookieHeader) {
+        const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith(`${ADMIN_SESSION_COOKIE}=`))
+        if (match) token = match.split('=')[1]
       }
     }
-  } catch {}
-  return undefined
+    return verifyAdminSessionToken(token) || undefined
+  } catch { return undefined }
 }
 
-export function isAdminFromRequest(req: Request | { headers: Headers; cookies?: any }): boolean {
-  const addr = getAdminWalletFromRequest(req)
-  return isAdmin(addr)
+export function isAdminFromSession(req: Request | { headers: Headers; cookies?: any }) {
+  return isAdmin(getAdminWalletFromSession(req))
 }
-
-export function requireAdminFromRequest(req: Request | { headers: Headers; cookies?: any }): void {
-  const addr = getAdminWalletFromRequest(req)
-  requireAdmin(addr)
+export function requireAdminFromSession(req: Request | { headers: Headers; cookies?: any }) {
+  requireAdmin(getAdminWalletFromSession(req))
 }

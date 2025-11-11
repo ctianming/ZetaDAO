@@ -12,11 +12,16 @@ const nextConfig = {
     return config
   },
   images: {
-    domains: ['localhost', 'vercel.app'],
+    domains: ['localhost', 'vercel.app', 'images.unsplash.com'],
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**.supabase.co',
+      },
+      // Allow Unsplash images used in demo/test data
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
       },
     ],
   },

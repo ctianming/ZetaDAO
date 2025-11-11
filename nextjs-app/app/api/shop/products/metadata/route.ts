@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdminFromRequest, getAdminWalletFromRequest } from '@/lib/auth'
+import { isAdminFromSession } from '@/lib/auth'
 
 // POST /api/shop/products/metadata
 // Body: { id?: string; slug?: string; attributes?: Record<string,string|number>; force?: boolean }
@@ -8,7 +8,7 @@ import { isAdminFromRequest, getAdminWalletFromRequest } from '@/lib/auth'
 // Returns: { success, metadata_uri, path, metadata }
 export async function POST(req: NextRequest) {
   try {
-    if (!isAdminFromRequest(req)) {
+    if (!isAdminFromSession(req)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
     const body = await req.json().catch(() => ({})) as {

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import Image from 'next/image'
 
 type Props = {
   title?: string
@@ -95,7 +96,7 @@ export default function ShareButtons({ title, tags = [], imageUrl, className }: 
         <button onClick={() => setOpenQR(v => !v)} className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50 flex items-center gap-1"><Icon name="qrcode"/> <span>二维码</span></button>
         {openQR && (
           <div className="absolute z-20 mt-2 p-3 bg-white border rounded-xl shadow-lg">
-            <img src={qrSrc} alt="二维码" className="w-[180px] h-[180px]" />
+            <Image src={qrSrc} alt="二维码" width={180} height={180} unoptimized />
             <div className="mt-2 text-center text-xs text-gray-500">手机扫码分享到微信等</div>
           </div>
         )}

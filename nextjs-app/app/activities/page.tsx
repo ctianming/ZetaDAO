@@ -1,4 +1,5 @@
 import Header from '@/components/layout/Header'
+import Image from 'next/image'
 import { supabase } from '@/lib/db'
 import { PublishedContent } from '@/types'
 import { mapPublishedRows } from '@/lib/transform'
@@ -51,12 +52,16 @@ export default async function ActivitiesPage() {
                   className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300"
                 >
                   <div className="flex flex-col md:flex-row gap-6">
-          {activity.metadata?.imageUrl && (
-                      <img
-            src={activity.metadata.imageUrl}
-                        alt={activity.title}
-                        className="w-full md:w-64 h-48 object-cover rounded-xl"
-                      />
+                    {activity.metadata?.imageUrl && (
+                      <div className="relative w-full md:w-64 h-48 rounded-xl overflow-hidden">
+                        <Image
+                          src={activity.metadata.imageUrl}
+                          alt={activity.title}
+                          fill
+                          unoptimized
+                          className="object-cover"
+                        />
+                      </div>
                     )}
                     
                     <div className="flex-1">

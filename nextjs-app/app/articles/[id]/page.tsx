@@ -1,6 +1,5 @@
 import Header from '@/components/layout/Header'
 import { supabase } from '@/lib/db'
-import { revalidatePath } from 'next/cache'
 import ClientActions from './client-actions'
 import { PublishedContent } from '@/types'
 import { notFound } from 'next/navigation'
@@ -10,6 +9,7 @@ import { markdownToHtml } from '@/lib/markdown'
 import AuthorCard from '@/components/content/AuthorCard'
 import AuthorInline from '@/components/content/AuthorInline'
 import ShareButtons from '@/components/content/ShareButtons'
+import Image from 'next/image'
 
 interface PageProps {
   params: {
@@ -81,12 +81,16 @@ export default async function ArticleDetailPage({ params }: PageProps) {
           <ShareButtons title={article.title} tags={article.metadata?.tags || []} imageUrl={article.metadata?.imageUrl || null} className="mb-6 flex items-center gap-2 flex-wrap" />
 
           {/* 文章封面图 */}
-      {article.metadata?.imageUrl && (
-            <img
-        src={article.metadata.imageUrl}
-              alt={article.title}
-              className="w-full rounded-2xl mb-8 shadow-lg"
-            />
+          {article.metadata?.imageUrl && (
+            <div className="relative w-full h-64 mb-8">
+              <Image
+                src={article.metadata.imageUrl}
+                alt={article.title}
+                fill
+                unoptimized
+                className="object-cover rounded-2xl shadow-lg"
+              />
+            </div>
           )}
 
           {/* 文章内容 */}

@@ -62,6 +62,10 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your-project-id
 # Admin 钱包地址（替换为您的地址）
 ADMIN_WALLETS=0x1234567890123456789012345678901234567890,0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
 
+# Admin 会话签名（可选但强烈建议自定义）
+# 用于 HMAC 签名 admin_session，会影响管理员会话的安全性
+ADMIN_SESSION_SECRET=change-this-to-a-strong-secret
+
 # ZetaChain
 NEXT_PUBLIC_ZETA_CHAIN_ID=7001
 NEXT_PUBLIC_ZETA_RPC_URL=https://zetachain-athens-evm.blockpi.network/v1/rpc/public
@@ -124,6 +128,11 @@ ADMIN_WALLETS=0xYourAddress1,0xYourAddress2
 - 审核投稿权限
 - 发布/删除内容权限
 - 管理用户权限
+
+此外，管理员访问通过“挑战签名 → 服务器校验 → 颁发 httpOnly Cookie（admin_session）”实现：
+- `GET /api/auth/admin/challenge` 返回 nonce；
+- 客户端用钱包签名后，`POST /api/auth/admin/verify` 进行校验，白名单通过后设置 `admin_session` Cookie；
+- 之后所有 Admin API 仅依赖会话，不再接受自定义请求头或查询参数。
 
 ### 自定义域名
 
@@ -219,3 +228,79 @@ npm install next-intl
 - 📧 Email: support@zetadao.com
 - 💬 Discord: discord.gg/zetadao
 - 🐦 Twitter: @ZetaDAO
+
+## 🔄 智能合约部署 / 升级 (Shop 合约 v1.2.0)
+
+本仓库包含 `zeta_shop/src/Shop.sol`，用于商品/订单与收益拆分逻辑。当前版本 `contractVersion()` 返回 `1.2.0`。
+
+### 版本概览
+| 版本 | 变更 |
+|------|------|
+| 1.0.0 | 基础产品/订单/状态流转 |
+| 1.1.0 | 固定 20/80 收益拆分 (pending + withdrawRevenue) |
+| 1.2.0 | 收益地址与比例可配置 (setRevenueConfig / getRevenueConfig)，新增 RevenueConfigUpdated 事件，禁止在 pending 未分发时修改配置 |
+
+### 部署步骤
+```bash
+# 1. 进入合约目录
+cd zeta_shop
+
+# 2. 确认测试通过
+forge test
+
+# 3. 设置环境变量 (.env 或导出到 shell)
+export PRIVATE_KEY=0x你的私钥 # 切勿提交到Git
+export RPC_URL=https://zetachain-athens-evm.blockpi.network/v1/rpc/public
+
+# 4. 部署 (广播 + 显示日志)
+forge script script/DeployShop.s.sol:DeployShop \
+  --rpc-url $RPC_URL \
+  --broadcast -vvvv
+
+# 如果支持验证（Etherscan 或区块浏览器 API），添加 --verify 与 --etherscan-api-key
+
+# 5. 记录输出的地址 (Shop deployed at: 0x...)
+
+# 6. 导出最新 ABI 供前端参考
+forge inspect src/Shop.sol:Shop abi > ../nextjs-app/lib/shop.abi.json
+```
+
+### 前端同步
+更新 `nextjs-app/.env.local`：
+```env
+NEXT_PUBLIC_SHOP_CONTRACT_ADDRESS=0x新部署地址
+NEXT_PUBLIC_SHOP_CHAIN_ID=7001
+```
+
+确认 `nextjs-app/lib/shop.ts` 中 `SHOP_ABI` 已包含以下条目（1.2.0 新增 / 需存在）：
+- function: `contractVersion()`
+- function: `setRevenueConfig(address,address,uint16)`
+- function: `getRevenueConfig()`
+- view vars: `revenueAddrA()`, `revenueAddrB()`, `shareBP_A()`, `shareBP_B()`
+- events: `RevenueConfigUpdated`, `RevenueAccrued`, `RevenueWithdrawn`
+
+### 升级注意事项
+若旧版本仍有未分发 pending 收益，应在旧合约调用 `withdrawRevenue()` 后再迁移；否则这些余额将留在旧地址。
+
+### 运行验证
+前端启动后在浏览器控制台：
+```js
+await publicClient.readContract({
+  address: process.env.NEXT_PUBLIC_SHOP_CONTRACT_ADDRESS,
+  abi: SHOP_ABI,
+  functionName: 'contractVersion'
+}) // 应返回 "1.2.0"
+```
+
+### 常见问题（合约）
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| setRevenueConfig revert RevenuePending | 仍有 pendingShare | 先执行 withdrawRevenue 分发收益 |
+| withdrawRevenue 转账失败 | 收益地址不能接收 ETH | 更换地址或在合约添加 receive() |
+| 事件未监听 | 前端未订阅 viem/wagmi | 在 provider 添加 `watchContractEvent` |
+
+### 后续建议
+- 引入代理模式便于未来平滑升级
+- 增加收益面板组件显示实时 pending
+- 支持 ERC20 支付路径
+

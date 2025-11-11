@@ -17,11 +17,8 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('uid,username,xp_total', { count: 'exact' })
       .eq('username', q)
-    const [{ data: exactRows, count: exactCount }, exactErr] = await Promise.all([
-      exactSel,
-      Promise.resolve(null as any)
-    ])
-    if ((exactRows as any)?.error) throw (exactRows as any).error
+    const { data: exactRows, count: exactCount, error: exactErr } = await exactSel
+    if (exactErr) throw exactErr
 
     // 2) 模糊匹配：用户名或钱包地址 ilike
     const likeSel = supabase

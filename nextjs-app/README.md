@@ -5,7 +5,7 @@
 > 重要更新（安全与链上体验）
 > 
 > - 登录已与“钱包连接”彻底解耦：登录使用账号体系（next-auth），链上操作单独通过钱包完成。
-> - 管理员鉴权改为“仅基于管理员钱包地址白名单”：服务端从请求头 `X-Admin-Wallet` 或查询参数 `adminWallet` 提取地址进行校验；为兼容旧逻辑，保留已连接钱包 Cookie 作为可选回退。
+> - 管理员鉴权采用“签名挑战 + httpOnly 会话 Cookie（admin_session）”：前端请求 `/api/auth/admin/challenge` → 使用钱包签名 → `/api/auth/admin/verify` 校验并颁发会话；后续所有 Admin API 仅依赖会话与服务端白名单 `ADMIN_WALLETS`，不再接受自定义请求头或查询参数。
 > - 全站统一使用 ZetaChain（可配置主网/测试网），在发起任意链上操作前会提示并尝试切换到目标网络。
 > - 钱包体验优化：支持 MetaMask、OKX（注入钱包）与 WalletConnect（需配置 projectId）。
 
@@ -84,6 +84,16 @@ TENCENT_SES_REGION=ap-hongkong
 # 必须是已验证的发信地址（或同域名下地址）
 TENCENT_SES_FROM=noreply@yourdomain.com
 TENCENT_SES_TEMPLATE_ID=12345
+
+# --- 自动刷新（前端轮询）配置 ---
+# 是否启用全局自动刷新（false 可彻底关闭依赖此配置的页面轮询）
+NEXT_PUBLIC_AUTO_REFRESH_ENABLED=true
+# 轮询间隔（毫秒），建议在生产环境根据流量与实时性权衡（如 15000 = 15s）
+NEXT_PUBLIC_SWR_REFRESH_MS=15000
+# 聚焦窗口时是否重新验证（SWR 页）
+NEXT_PUBLIC_SWR_REVALIDATE_ON_FOCUS=true
+# 网络重新连通时是否重新验证（SWR 页）
+NEXT_PUBLIC_SWR_REVALIDATE_ON_RECONNECT=true
 ```
 
 ### 3. 设置 Supabase 数据库
@@ -272,7 +282,7 @@ vercel --prod
 
 - 单一链配置：在 `lib/web3.ts` 集中维护 ZetaChain 网络（主网/测试网），前后端统一读取。
 - 客户端网络强制：在 Header、商店购买页、管理员商店页等发起链上交易前强制提示并尝试切换网络。
-- 管理员鉴权：服务端通过 `isAdminFromRequest` 校验管理员钱包地址。地址来源优先顺序为：请求头 `X-Admin-Wallet` → 查询参数 `adminWallet` → 兼容回退的 `connected_wallet` Cookie。
+- 管理员鉴权：服务端通过 `isAdminFromSession` + 白名单校验，来源为 httpOnly Cookie `admin_session`（由挑战签名流程颁发）。
 - Explorer 链接：自动根据当前配置指向对应链的浏览器（可通过 `NEXT_PUBLIC_ZETA_EXPLORER_BASE` 覆盖）。
 
 ## 🛍️ 商店管理（Shop）
@@ -311,11 +321,10 @@ vercel --prod
 
 ### 管理端鉴权约定
 
-- 所有管理员 API 与导出/状态更新操作，都需在请求中携带管理员钱包地址：
-    - 请求头：`X-Admin-Wallet: <address>`
-    - 或查询参数：`?adminWallet=<address>`
-    - 服务器将与白名单 `ADMIN_WALLETS` 校验匹配。
-    - 仍保留已连接钱包 Cookie 作为兼容性回退。
+- 所有管理员 API 与导出/状态更新操作，均依赖服务端颁发的 httpOnly 会话 Cookie：`admin_session`。
+- 获取会话：`GET /api/auth/admin/challenge`（返回 nonce）→ 使用钱包签名 → `POST /api/auth/admin/verify`（服务器校验签名 + 白名单，颁发会话）。
+- 校验接口：`GET /api/auth/is-admin`（返回 `{ isAdmin, address, via: 'session' }`）。
+- 不再接受自定义请求头 `X-Admin-Wallet` 或查询参数 `adminWallet`。
 
 ## � 邮件模板
 

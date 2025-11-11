@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { PublishedContent } from '@/types'
 import { formatRelativeTime, truncateAddress } from '@/lib/utils'
 import { Eye, Heart } from 'lucide-react'
@@ -18,10 +19,13 @@ export default function ArticleCard({ article }: ArticleCardProps) {
     >
       <div className="flex gap-6">
         {article.metadata?.imageUrl && (
-          <img
+          <Image
             src={article.metadata.imageUrl}
             alt={article.title}
-            className="w-48 h-32 object-cover rounded-xl"
+            width={192}
+            height={128}
+            unoptimized
+            className="object-cover rounded-xl w-48 h-32"
           />
         )}
         

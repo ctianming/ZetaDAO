@@ -24,10 +24,19 @@ export const SHOP_ORDER_STATUS_CODE: Record<(typeof SHOP_ORDER_STATUSES)[number]
 }
 
 export const SHOP_ABI = [
+  // --- Added revenue split public vars ---
   {
     type: 'constructor',
     stateMutability: 'nonpayable',
     inputs: [],
+  },
+  // Versioning helper
+  {
+    type: 'function',
+    name: 'contractVersion',
+    stateMutability: 'pure',
+    inputs: [],
+    outputs: [{ internalType: 'string', name: '', type: 'string' }],
   },
   {
     type: 'event',
@@ -121,6 +130,39 @@ export const SHOP_ABI = [
     inputs: [
       { indexed: true, internalType: 'address', name: 'to', type: 'address' },
       { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'RevenueAccrued',
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'uint256', name: 'orderId', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'gross', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'shareA', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'shareB', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'RevenueWithdrawn',
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'address', name: 'addrA', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'amountA', type: 'uint256' },
+      { indexed: true, internalType: 'address', name: 'addrB', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'amountB', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'RevenueConfigUpdated',
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'address', name: 'addrA', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'addrB', type: 'address' },
+      { indexed: false, internalType: 'uint16', name: 'shareA', type: 'uint16' },
+      { indexed: false, internalType: 'uint16', name: 'shareB', type: 'uint16' },
     ],
   },
   {
@@ -245,6 +287,78 @@ export const SHOP_ABI = [
     name: 'payOrder',
     stateMutability: 'payable',
     inputs: [{ internalType: 'uint256', name: 'orderId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'pendingShareA',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'pendingShareB',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'revenueAddrA',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'revenueAddrB',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'shareBP_A',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ internalType: 'uint16', name: '', type: 'uint16' }],
+  },
+  {
+    type: 'function',
+    name: 'shareBP_B',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ internalType: 'uint16', name: '', type: 'uint16' }],
+  },
+  {
+    type: 'function',
+    name: 'withdrawRevenue',
+    stateMutability: 'nonpayable',
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'getRevenueConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { internalType: 'address', name: 'addrA', type: 'address' },
+      { internalType: 'address', name: 'addrB', type: 'address' },
+      { internalType: 'uint16', name: 'shareA', type: 'uint16' },
+      { internalType: 'uint16', name: 'shareB', type: 'uint16' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'setRevenueConfig',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { internalType: 'address', name: 'addrA', type: 'address' },
+      { internalType: 'address', name: 'addrB', type: 'address' },
+      { internalType: 'uint16', name: 'shareA', type: 'uint16' },
+    ],
     outputs: [],
   },
   {

@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast'
 
 export default function SubmitPage() {
   const { address, isConnected } = useAccount()
-  const { data: session, status } = useSession()
+  const { data: session } = useSession()
   const router = useRouter()
   const { show } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)

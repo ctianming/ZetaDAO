@@ -3,7 +3,7 @@
 import Header from '@/components/layout/Header'
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi'
-import { useRouter } from 'next/navigation'
+import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 import { useToast } from '@/components/ui/Toast'
 import { ShopProduct, ShopOrder } from '@/types'
 import { formatUnits, parseUnits } from 'viem'
@@ -33,17 +33,17 @@ const ACTIONS: Record<
 const PRODUCT_STATUS_OPTIONS: ShopProduct['status'][] = ['active', 'inactive']
 
 export default function AdminShopPage() {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, status } = useAccount()
+  const { isAdmin, loading: authLoading, error: authError, refresh: refreshAdmin } = useEnsureAdminSession()
   const currentChainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
-  const router = useRouter()
   const { show } = useToast()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
   const { EXPLORER_BASE } = getZetaChainConfig()
 
   const [tab, setTab] = useState<'products' | 'orders'>('products')
-  const [initializing, setInitializing] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   const [list, setList] = useState<ShopProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,34 +52,17 @@ export default function AdminShopPage() {
   const [orders, setOrders] = useState<ShopOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  // 辅助：允许直接粘贴 Wei 值
+  const [weiInput, setWeiInput] = useState('')
+  // ZETA 显示输入的受控值，允许用户输入小数点等“中间态”而不被强制格式化
+  const [priceZeta, setPriceZeta] = useState('')
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        setInitializing(true)
-        // 基于已连接钱包的 httpOnly Cookie 进行管理员校验
-  const adminRes = await fetch(`/api/auth/is-admin?adminWallet=${encodeURIComponent(address || '')}`, { cache: 'no-store', headers: address ? { 'X-Admin-Wallet': address } : {} })
-        const adminJson = await adminRes.json()
-        if (!adminJson?.isAdmin) {
-          show('需要管理员权限', { type: 'error' })
-          router.push('/')
-          return
-        }
-      } catch (error) {
-        console.error('初始化管理员商店失败', error)
-        show('管理员校验失败', { type: 'error' })
-        router.push('/')
-      } finally {
-        setInitializing(false)
-      }
-    }
-    init()
-  }, [router, show])
+  useEffect(() => { setMounted(true) }, [])
 
   const loadProducts = useCallback(async () => {
     setLoading(true)
     try {
-  const res = await fetch(`/api/shop/products?includeInactive=1${address ? `&adminWallet=${encodeURIComponent(address)}` : ''}`, { cache: 'no-store', headers: address ? { 'X-Admin-Wallet': address } : {} })
+    const res = await fetch('/api/shop/products?includeInactive=1', { cache: 'no-store' })
       const json = (await res.json()) as { success?: boolean; data?: ShopProduct[] }
       if (json?.success && Array.isArray(json.data)) {
         setList(json.data)
@@ -95,7 +78,7 @@ export default function AdminShopPage() {
   const loadOrders = useCallback(async () => {
     setOrdersLoading(true)
     try {
-  const res = await fetch(`/api/shop/orders${address ? `?adminWallet=${encodeURIComponent(address)}` : ''}`, { cache: 'no-store', headers: address ? { 'X-Admin-Wallet': address } : {} })
+    const res = await fetch('/api/shop/orders', { cache: 'no-store' })
       const json = (await res.json()) as { success?: boolean; data?: ShopOrder[] }
       if (json?.success && Array.isArray(json.data)) {
         setOrders(json.data)
@@ -109,18 +92,15 @@ export default function AdminShopPage() {
   }, [show])
 
   useEffect(() => {
-    if (initializing) return
-    if (tab === 'products') {
-      loadProducts()
-    } else {
-      loadOrders()
-    }
-  }, [initializing, tab, loadOrders, loadProducts])
+    if (!mounted) return
+    if (!isAdmin) return
+    if (tab === 'products') { loadProducts() } else { loadOrders() }
+  }, [mounted, tab, loadOrders, loadProducts, isAdmin])
 
   const saveProduct = async () => {
     try {
       const method = form.id ? 'PUT' : 'POST'
-  const res = await fetch('/api/shop/products', { method, headers: { 'Content-Type': 'application/json', ...(address ? { 'X-Admin-Wallet': address } : {}) }, body: JSON.stringify(form) })
+    const res = await fetch('/api/shop/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       const json = await res.json()
       if (!json?.success) {
         show(json?.error || '保存失败', { type: 'error' })
@@ -135,6 +115,12 @@ export default function AdminShopPage() {
     }
   }
 
+  // 当切换编辑的商品或重置表单时，同步一次展示用的 ZETA 文本
+  useEffect(() => {
+    setPriceZeta(form.price_wei ? formatUnits(BigInt(form.price_wei), 18) : '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.id])
+
   const generateMetadata = async (p?: ShopProduct, force = false) => {
     try {
       const payload: any = {}
@@ -146,11 +132,7 @@ export default function AdminShopPage() {
       }
       if (slug) payload.slug = slug
       if (force) payload.force = true
-      const res = await fetch('/api/shop/products/metadata', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(address ? { 'X-Admin-Wallet': address } : {}) },
-        body: JSON.stringify(payload),
-      })
+      const res = await fetch('/api/shop/products/metadata', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const json = await res.json()
       if (!json?.success) {
         show(json?.error || '生成元数据失败', { type: 'error' })
@@ -245,11 +227,7 @@ export default function AdminShopPage() {
       }
       if (!newId) throw new Error('未能解析链上商品ID')
       // 回写数据库 onchain_id / last_synced_block（可选：读取区块号）
-      await fetch('/api/shop/products', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...(address ? { 'X-Admin-Wallet': address } : {}) },
-        body: JSON.stringify({ id: product.id, onchain_id: newId }),
-      })
+      await fetch('/api/shop/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: product.id, onchain_id: newId }) })
       await loadProducts()
       show(isCreate ? '链上商品已创建' : '链上商品已更新', { type: 'success' })
     } catch (error) {
@@ -265,7 +243,7 @@ export default function AdminShopPage() {
   const deleteProduct = async (product: ShopProduct) => {
     if (!confirm(`确认删除 ${product.name} 吗？`)) return
     try {
-  const res = await fetch(`/api/shop/products?id=${encodeURIComponent(product.id)}`, { method: 'DELETE', headers: address ? { 'X-Admin-Wallet': address } : {} })
+    const res = await fetch(`/api/shop/products?id=${encodeURIComponent(product.id)}`, { method: 'DELETE' })
       const json = await res.json()
       if (!json?.success) {
         show(json?.error || '删除失败', { type: 'error' })
@@ -281,7 +259,7 @@ export default function AdminShopPage() {
 
   const exportCSV = async () => {
     try {
-  const res = await fetch(`/api/shop/orders?format=csv${address ? `&adminWallet=${encodeURIComponent(address)}` : ''}`, { headers: address ? { 'X-Admin-Wallet': address } : {} })
+    const res = await fetch('/api/shop/orders?format=csv')
       if (!res.ok) {
         throw new Error('导出订单失败')
       }
@@ -365,10 +343,7 @@ export default function AdminShopPage() {
 
       const resp = await fetch('/api/shop/order/status', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(address ? { 'X-Admin-Wallet': address } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order_id: order.id,
           tx_hash: txHash,
@@ -392,12 +367,52 @@ export default function AdminShopPage() {
     }
   }
 
-  if (initializing) {
+  if (!mounted) return null
+
+  // 要求先连接管理员钱包，以便触发签名挑战
+  if (!isConnected || !address || status !== 'connected') {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
         <main className="container mx-auto px-4 py-12">
-          <div className="text-sm text-gray-500">加载中...</div>
+          <p className="text-center text-sm text-muted-foreground">
+            {status === 'disconnected' ? '请先连接管理员钱包后再访问后台。' : '正在检查管理员权限，请稍候...'}
+          </p>
+        </main>
+      </div>
+    )
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <main className="container mx-auto px-4 py-12">
+          <p className="text-center text-sm text-muted-foreground">正在进行管理员签名认证...</p>
+        </main>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <main className="container mx-auto px-4 py-12">
+          <div className="max-w-xl mx-auto bg-white rounded-2xl border shadow-sm p-6">
+            <h1 className="text-2xl font-bold mb-4">管理员访问指引</h1>
+            <ol className="space-y-3 text-sm list-decimal list-inside mb-4">
+              <li>确保 <code>ADMIN_WALLETS</code> 已在服务端环境变量中配置。</li>
+              <li>右上角连接目标管理员钱包地址。</li>
+              <li>系统会自动发起“挑战签名”流程；签名仅用于身份确认，不涉及资金。</li>
+              <li>若签名弹窗未出现，可点击下方“重新认证”。</li>
+            </ol>
+            {authError && <div className="text-xs text-red-600 mb-3">{authError}</div>}
+            <div className="flex gap-3">
+              <button onClick={() => refreshAdmin()} className="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm">重新认证</button>
+              <button onClick={() => location.reload()} className="px-4 py-2 rounded-lg border text-sm">刷新页面</button>
+            </div>
+          </div>
         </main>
       </div>
     )
@@ -458,20 +473,67 @@ export default function AdminShopPage() {
                     value={form.image_url || ''}
                     onChange={(event) => setForm((state) => ({ ...state, image_url: event.target.value }))}
                   />
-                  <input
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="价格（ZETA，最多18位小数）"
-                    value={form.price_wei ? formatUnits(BigInt(form.price_wei), 18) : ''}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      try {
-                        const wei = parseUnits((value || '0') as `${string}`, 18).toString()
-                        setForm((state) => ({ ...state, price_wei: wei }))
-                      } catch {
-                        // ignore invalid decimal input until用户修正
-                      }
-                    }}
-                  />
+                  <div className="space-y-2">
+                    <input
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="价格（ZETA，最多18位小数，如 0.01）"
+                      value={priceZeta}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        // 允许中间态：空串、数字、小数点一次
+                        if (/^\d*(?:\.\d*)?$/.test(value)) {
+                          setPriceZeta(value)
+                          // 尝试在合法小数时更新 Wei，部分中间态（例如以点结尾）将暂不更新 Wei
+                          try {
+                            if (value === '' || value === '.') return
+                            const wei = parseUnits(value as `${string}`, 18).toString()
+                            setForm((state) => ({ ...state, price_wei: wei }))
+                          } catch {
+                            // 保留输入，等待用户进一步修正
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // 失焦时做一次温和归一：去掉末尾点与前导零
+                        let v = priceZeta.trim()
+                        if (v === '.' || v === '') { setPriceZeta(''); return }
+                        if (v.endsWith('.')) v = v.slice(0, -1)
+                        // 去掉多余前导零（保留 0.x）
+                        if (/^0+\d/.test(v)) v = String(Number(v))
+                        setPriceZeta(v)
+                        try {
+                          const wei = parseUnits(v as `${string}`, 18).toString()
+                          setForm((state) => ({ ...state, price_wei: wei }))
+                        } catch {
+                          // 若依然不合法，清空
+                          setForm((state) => ({ ...state, price_wei: undefined as any }))
+                        }
+                      }}
+                    />
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <span>或直接粘贴 Wei：</span>
+                      <input
+                        className="flex-1 border rounded px-2 py-1"
+                        placeholder="例如 10000000000000000"
+                        value={weiInput}
+                        onChange={(e)=>setWeiInput(e.target.value.trim())}
+                      />
+                      <button
+                        type="button"
+                        className="px-2 py-1 border rounded"
+                        onClick={()=>{
+                          if (!weiInput) return
+                          if (!/^\d+$/.test(weiInput)) { show('Wei 需为纯数字', { type: 'error' }); return }
+                          // 合理范围简单防御：不超过 1e78
+                          if (weiInput.length > 78) { show('Wei 数值过大', { type: 'error' }); return }
+                          setForm((s)=>({ ...s, price_wei: weiInput }))
+                          try { setPriceZeta(formatUnits(BigInt(weiInput), 18)) } catch {}
+                          setWeiInput('')
+                          show('已使用 Wei 设定价格', { type: 'success' })
+                        }}
+                      >应用</button>
+                    </div>
+                  </div>
                   <input
                     className="w-full border rounded-lg px-3 py-2"
                     placeholder="库存"

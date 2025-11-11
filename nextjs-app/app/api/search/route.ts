@@ -26,11 +26,10 @@ export async function GET(request: NextRequest) {
     if (category) query = query.eq('category', category)
     if (articleCategory) query = query.eq('article_category', articleCategory)
 
-    // tag match: overlap with tags array
-    // if q looks like #tag or plain word, try overlap
-    const maybeTag = q.startsWith('#') ? q.slice(1) : q
-    if (maybeTag) {
-      query = query.overlaps('tags', [maybeTag])
+    // 标签搜索：仅当 q 以 # 开头时，追加标签条件；否则不强制与标签重叠，避免过度收紧查询
+    if (q.startsWith('#')) {
+      const tag = q.slice(1)
+      if (tag) query = query.overlaps('tags', [tag])
     }
 
     const { data, error, count } = await query

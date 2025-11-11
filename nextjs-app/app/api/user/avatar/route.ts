@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     // Upload to Supabase Storage
   const key = `${s.uid}/${filename}`
-    const { data: up, error: upErr } = await (supabaseAdmin as any).storage
+    const { error: upErr } = await (supabaseAdmin as any).storage
       .from(bucket)
       .upload(key, buffer, {
         contentType: file.type || 'image/png',

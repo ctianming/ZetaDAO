@@ -3,7 +3,7 @@
 > 更新要点（登录与链上体验）
 >
 > - 登录与钱包连接彻底解耦：登录走账号体系；链上操作单独通过钱包完成。
-> - 管理员鉴权更新：服务端从请求头 `X-Admin-Wallet` 或查询参数 `adminWallet` 获取管理员地址并与白名单校验（保留 Cookie 作为兼容回退）。
+> - 管理员鉴权更新：采用“挑战签名 → 服务器校验 → 颁发 httpOnly admin_session”流程；仅通过会话与 `ADMIN_WALLETS` 白名单校验，不再接受自定义请求头或查询参数。
 > - 全站统一 ZetaChain（主网/测试网可切换）：前端在发起链上操作前会提示并尝试切换到目标网络。
 > - 钱包体验优化：支持 MetaMask、OKX（注入钱包）、WalletConnect（需 projectId）。
 
@@ -212,7 +212,7 @@ Admin → 登录 /admin
 - 商品：`slug/name/description/image_url/price_wei/stock/status/metadata_uri/onchain_id`
 - 管理：商品 CRUD、上下架，订单列表与导出，发货/完成/取消/退款链上动作
 - 元数据：一键生成（存储于 Supabase Storage，经 `/api/storage/file` 代理访问）
-- 鉴权：`X-Admin-Wallet` / `?adminWallet=` → 白名单校验（Cookie 兼容回退）
+- 鉴权：`admin_session` 会话 Cookie（签名挑战获取） + 白名单校验
 
 ### 文档（4个）
 - ✅ README.md - 项目说明

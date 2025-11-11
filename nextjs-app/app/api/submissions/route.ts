@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/db'
-import { isAdminFromRequest, getAdminWalletFromRequest } from '@/lib/auth'
+import { isAdminFromSession, getAdminWalletFromSession } from '@/lib/auth'
 import { mapSubmissionRows } from '@/lib/transform'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/nextauth'
@@ -12,10 +12,10 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') || 'pending'
-  const connectedWallet = getAdminWalletFromRequest(request)
+  const connectedWallet = getAdminWalletFromSession(request)
 
     // 如果是管理员，可以查看所有投稿
-    if (isAdminFromRequest(request)) {
+  if (isAdminFromSession(request)) {
       const { data, error } = await supabaseAdmin
         .from('submissions')
         .select('*')
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         .order('submitted_at', { ascending: false })
       data = resp.data as any[] | null
       error = resp.error
-    } else if (connectedWallet) {
+  } else if (connectedWallet) {
       // 新库可能已经移除 wallet_address 列；优先通过身份映射到 user_uid
       const { data: ident } = await supabaseAdmin
         .from('user_identities')

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdminFromRequest } from '@/lib/auth'
+import { isAdminFromSession } from '@/lib/auth'
 
 // POST /api/debug/create-sample-article
 // 管理员调试接口：快速创建一篇已发布的示例文章，方便前端查看展示效果。
 // 返回 { success, data: { id } }
 export async function POST(req: NextRequest) {
-  if (!isAdminFromRequest(req)) {
+  if (!isAdminFromSession(req)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   }
   try {

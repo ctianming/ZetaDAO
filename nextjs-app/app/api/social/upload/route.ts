@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const key = `posts/${s.uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'avatars'
 
-    const { data, error } = await (supabaseAdmin as any).storage.from(bucket).upload(key, buffer, {
+    const { error } = await (supabaseAdmin as any).storage.from(bucket).upload(key, buffer, {
       contentType: file.type || 'image/jpeg',
       upsert: false,
     })

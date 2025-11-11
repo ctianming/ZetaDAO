@@ -1,32 +1,16 @@
+"use client"
 import Header from '@/components/layout/Header'
-import { supabase } from '@/lib/db'
-import { Ambassador } from '@/types'
-import { Mail, Twitter, Send } from 'lucide-react'
-import { mapAmbassadorRows } from '@/lib/transform'
+import useSWR from 'swr'
+import { Twitter, Send } from 'lucide-react'
+import { getSWRConfig } from '@/lib/config'
+import Image from 'next/image'
 
-export const revalidate = 60
+const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-async function getAmbassadors(): Promise<Ambassador[]> {
-  try {
-    const { data, error } = await supabase
-      .from('ambassadors')
-      .select('*')
-      .eq('status', 'active')
-      .order('contributions', { ascending: false })
-
-    if (error) {
-      console.error('Error fetching ambassadors:', error)
-      return []
-    }
-    return mapAmbassadorRows(data)
-  } catch (e) {
-    console.error('Error fetching ambassadors:', e)
-    return []
-  }
-}
-
-export default async function AmbassadorsPage() {
-  const ambassadors = await getAmbassadors()
+export default function AmbassadorsPage() {
+  const swrCfg = getSWRConfig()
+  const { data, error, isValidating } = useSWR('/api/content/ambassadors', fetcher, swrCfg)
+  const ambassadors = (data?.data || []) as any[]
 
   return (
     <div className="min-h-screen">
@@ -37,6 +21,11 @@ export default async function AmbassadorsPage() {
           <p className="text-muted-foreground mb-12">
             认识来自全球各地的 ZetaChain 社区大使
           </p>
+
+          <div className="mb-6 text-xs text-gray-500 flex items-center gap-3">
+            {isValidating ? <span className="animate-pulse">同步最新数据中...</span> : <span>已加载 {ambassadors.length} 位</span>}
+            {error && <span className="text-red-500">加载出错</span>}
+          </div>
 
           {ambassadors.length === 0 ? (
             <div className="text-center py-20">
@@ -52,11 +41,9 @@ export default async function AmbassadorsPage() {
                   {/* 头像 */}
                   <div className="flex items-center gap-4 mb-4">
                     {ambassador.avatar ? (
-                      <img
-                        src={ambassador.avatar}
-                        alt={ambassador.name}
-                        className="w-16 h-16 rounded-full object-cover"
-                      />
+                      <div className="w-16 h-16 rounded-full relative overflow-hidden">
+                        <Image src={ambassador.avatar} alt={ambassador.name} fill unoptimized className="object-cover" />
+                      </div>
                     ) : (
                       <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white text-2xl font-bold">
                         {ambassador.name.charAt(0)}

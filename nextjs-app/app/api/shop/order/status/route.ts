@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/nextauth'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdminFromRequest } from '@/lib/auth'
+import { isAdminFromSession } from '@/lib/auth'
 import { SHOP_ABI, SHOP_ORDER_STATUS_CODE } from '@/lib/shop'
 import { createPublicClient, decodeEventLog, Hex, http } from 'viem'
 import { getZetaChainConfig } from '@/lib/web3'
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
-  if (!isAdminFromRequest(req)) {
+  if (!isAdminFromSession(req)) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -104,6 +104,31 @@ export async function POST(req: NextRequest) {
     .select('*')
     .single()
   if (updateError) return NextResponse.json({ success: false, error: updateError.message }, { status: 500 })
+
+  // Adjust inventory off-chain for cancel/refund to mirror on-chain stock increment.
+  try {
+    if (status === 'cancelled' || status === 'refunded') {
+      const productId = order.product_id as string | undefined
+      const qty = Number(order.quantity || 0)
+      if (productId && Number.isFinite(qty) && qty > 0) {
+        const { data: product } = await supabaseAdmin
+          .from('shop_products')
+          .select('id, stock')
+          .eq('id', productId)
+          .maybeSingle()
+        const current = Number(product?.stock ?? 0)
+        if (Number.isFinite(current)) {
+          const next = current + qty
+          await supabaseAdmin
+            .from('shop_products')
+            .update({ stock: String(next), updated_at: new Date().toISOString() })
+            .eq('id', productId)
+        }
+      }
+    }
+  } catch {
+    // best-effort consistency; admin can correct if needed
+  }
 
   return NextResponse.json({ success: true, data: updated })
 }

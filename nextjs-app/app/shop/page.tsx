@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Header from '@/components/layout/Header'
 import { ShopProduct } from '@/types'
 import Image from 'next/image'
@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { SHOP_ABI, SHOP_CONTRACT_ADDRESS } from '@/lib/shop'
 import { getZetaChainConfig } from '@/lib/web3'
 import { Hex, formatUnits, decodeEventLog } from 'viem'
+import { AUTO_REFRESH_ENABLED, SWR_REFRESH_MS } from '@/lib/config'
 
 export default function ShopPage() {
   const [products, setProducts] = useState<ShopProduct[]>([])
@@ -24,14 +25,29 @@ export default function ShopPage() {
   const { CHAIN_ID, CHAIN } = getZetaChainConfig()
 
   useEffect(() => {
+    let timer: any
     const load = async () => {
       try {
-        const res = await fetch('/api/shop/products')
+        const res = await fetch('/api/shop/products', { cache: 'no-store' })
         const j = await res.json()
         if (j?.success) setProducts(j.data)
       } finally { setLoading(false) }
     }
     load()
+    // 自动刷新（可通过环境变量控制）
+    if (AUTO_REFRESH_ENABLED && SWR_REFRESH_MS > 0) {
+      timer = setInterval(load, SWR_REFRESH_MS)
+    }
+    return () => timer && clearInterval(timer)
+  }, [])
+
+  // After a successful purchase we clear selection but we also want to refresh product list (stock changes)
+  const refreshProducts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/shop/products')
+      const j = await res.json()
+      if (j?.success) setProducts(j.data)
+    } catch {}
   }, [])
 
   const totalWei = useMemo(() => {
@@ -46,7 +62,7 @@ export default function ShopPage() {
 
   useEffect(() => {
     if (writeError) show(writeError.message, { type: 'error' })
-  }, [writeError])
+  }, [writeError, show])
 
   const startPurchase = async () => {
     if (!selected) return
@@ -145,10 +161,12 @@ export default function ShopPage() {
         throw new Error(confirmJson.error || '订单确认失败')
       }
 
-      show('支付成功，订单已确认', { type: 'success' })
-      setSelected(null)
-      setQuantity(1)
-      setAddressInline({ contact_name: '', phone: '', address: '' })
+  show('支付成功，订单已确认', { type: 'success' })
+  setSelected(null)
+  setQuantity(1)
+  setAddressInline({ contact_name: '', phone: '', address: '' })
+  // refresh product list to reflect updated stock
+  await refreshProducts()
     } catch (e: any) {
       show(e.message || '支付失败', { type: 'error' })
       setBuying(false)
@@ -180,6 +198,9 @@ export default function ShopPage() {
           <a href="/shop/addresses" className="text-sm text-primary-600 hover:underline">我的收货信息</a>
         </div>
 
+        <div className="mb-4 text-xs text-gray-500">
+          {loading ? '首次加载...' : `当前商品数：${products.filter(p=>p.status==='active').length}`}
+        </div>
         {loading ? (
           <div className="text-sm text-gray-600">加载中...</div>
         ) : (

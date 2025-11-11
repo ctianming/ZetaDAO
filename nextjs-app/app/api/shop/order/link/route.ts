@@ -77,5 +77,29 @@ export async function POST(req: NextRequest) {
     .single()
   if (updateError) return NextResponse.json({ success: false, error: updateError.message }, { status: 500 })
 
+  // Keep off-chain inventory consistent with on-chain: stock was reduced at createOrder.
+  // Decrement product stock off-chain once when linking succeeds (first-time only).
+  try {
+    const productId = order.product_id as string | undefined
+    const qty = Number(order.quantity || 0)
+    if (productId && Number.isFinite(qty) && qty > 0) {
+      const { data: product } = await supabaseAdmin
+        .from('shop_products')
+        .select('id, stock')
+        .eq('id', productId)
+        .maybeSingle()
+      const current = Number(product?.stock ?? 0)
+      if (Number.isFinite(current) && current > 0) {
+        const next = Math.max(0, current - qty)
+        await supabaseAdmin
+          .from('shop_products')
+          .update({ stock: String(next), updated_at: new Date().toISOString() })
+          .eq('id', productId)
+      }
+    }
+  } catch {
+    // best-effort; inventory can be corrected by admin if needed
+  }
+
   return NextResponse.json({ success: true, data: updated })
 }

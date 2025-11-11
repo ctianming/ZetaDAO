@@ -29,6 +29,14 @@ contract Shop {
     }
 
     address public owner;
+    // Configurable revenue split recipients & basis points (shareA in [0,10000], shareB = 10000-shareA)
+    address public revenueAddrA;
+    address public revenueAddrB;
+    uint16 public shareBP_A; // basis points (parts per 10_000)
+    uint16 public shareBP_B; // derived
+    // Pending undistributed revenue shares kept in contract to allow potential refunds before withdrawal
+    uint256 public pendingShareA;
+    uint256 public pendingShareB;
     uint256 public nextProductId;
     uint256 public nextOrderId;
 
@@ -60,6 +68,9 @@ contract Shop {
     event OrderStatusChanged(uint256 indexed orderId, OrderStatus status, bytes32 note);
     event Withdraw(address indexed to, uint256 amount);
     event AdminUpdated(address indexed account, bool enabled);
+    event RevenueAccrued(uint256 indexed orderId, uint256 gross, uint256 shareA, uint256 shareB);
+    event RevenueWithdrawn(address indexed addrA, uint256 amountA, address indexed addrB, uint256 amountB);
+    event RevenueConfigUpdated(address indexed addrA, address indexed addrB, uint16 shareA, uint16 shareB);
 
     /// --------------------
     /// Errors
@@ -104,6 +115,33 @@ contract Shop {
 
     constructor() {
         owner = msg.sender;
+        // initialize default 20/80 split using provided addresses (can be updated later)
+        revenueAddrA = 0x1358bFAC4032C2ff79e50e132840F33f7f709D89;
+        revenueAddrB = 0x6cD6592b7D2A9b1E59AA60a6138434d2fE4CD062;
+        shareBP_A = 2000; // 20%
+        shareBP_B = 8000; // 80%
+        emit RevenueConfigUpdated(revenueAddrA, revenueAddrB, shareBP_A, shareBP_B);
+    }
+
+    /// --------------------
+    /// Revenue config management
+    /// --------------------
+    error InvalidRevenueConfig();
+    error RevenuePending(); // cannot change config while pending shares exist to avoid accounting complexity
+
+    function setRevenueConfig(address addrA, address addrB, uint16 shareA) external onlyOwner {
+        if (pendingShareA + pendingShareB != 0) revert RevenuePending();
+        if (addrA == address(0) || addrB == address(0)) revert InvalidRevenueConfig();
+        if (shareA > 10000) revert InvalidRevenueConfig();
+        revenueAddrA = addrA;
+        revenueAddrB = addrB;
+        shareBP_A = shareA;
+        shareBP_B = uint16(10000 - shareA);
+        emit RevenueConfigUpdated(addrA, addrB, shareBP_A, shareBP_B);
+    }
+
+    function getRevenueConfig() external view returns (address addrA, address addrB, uint16 shareA, uint16 shareB) {
+        return (revenueAddrA, revenueAddrB, shareBP_A, shareBP_B);
     }
 
     /// --------------------
@@ -205,7 +243,7 @@ contract Shop {
         emit OrderMetadataUpdated(orderId, metadataHash, msg.sender);
     }
 
-    function payOrder(uint256 orderId) external payable {
+    function payOrder(uint256 orderId) external payable nonReentrant {
         Order storage order = _order(orderId);
         if (order.status != OrderStatus.Created) revert InvalidStatus();
         if (msg.sender != order.buyer) revert NotBuyer();
@@ -214,7 +252,14 @@ contract Shop {
         order.status = OrderStatus.Paid;
         order.updatedAt = uint64(block.timestamp);
 
+        // Accrue revenue shares (not immediately transferred to keep refund capability)
+    uint256 shareA = (msg.value * shareBP_A) / 10000;
+    uint256 shareB = msg.value - shareA; // remainder
+        pendingShareA += shareA;
+        pendingShareB += shareB;
+
         emit OrderPaid(orderId, msg.sender, msg.value);
+        emit RevenueAccrued(orderId, msg.value, shareA, shareB);
         emit OrderStatusChanged(orderId, OrderStatus.Paid, bytes32(0));
     }
 
@@ -258,6 +303,12 @@ contract Shop {
         Product storage product = _product(order.productId);
         product.stock += order.quantity;
 
+        // Adjust pending shares (proportional rollback)
+    uint256 shareA = (order.totalPrice * shareBP_A) / 10000;
+    uint256 shareB = order.totalPrice - shareA;
+        if (pendingShareA >= shareA) pendingShareA -= shareA; else pendingShareA = 0; // defensive
+        if (pendingShareB >= shareB) pendingShareB -= shareB; else pendingShareB = 0;
+
         (bool ok, ) = payable(order.buyer).call{value: order.totalPrice}("");
         if (!ok) revert TransferFailed();
 
@@ -284,12 +335,30 @@ contract Shop {
     /// --------------------
 
     function withdraw(address payable to, uint256 amount) external onlyOwner nonReentrant {
+        // Legacy direct withdraw (avoids touching pending shares) - kept for emergency / migration
         if (to == address(0)) to = payable(owner);
-        uint256 balance = address(this).balance;
-        uint256 value = amount == 0 || amount > balance ? balance : amount;
+        uint256 distributable = address(this).balance - (pendingShareA + pendingShareB);
+        uint256 value = amount == 0 || amount > distributable ? distributable : amount;
         (bool ok, ) = to.call{value: value}("");
         if (!ok) revert TransferFailed();
         emit Withdraw(to, value);
+    }
+
+    /// @notice Withdraw accumulated revenue shares to predefined addresses
+    function withdrawRevenue() external onlyOwner nonReentrant {
+        uint256 amountA = pendingShareA;
+        uint256 amountB = pendingShareB;
+        pendingShareA = 0;
+        pendingShareB = 0;
+        if (amountA > 0) {
+            (bool okA, ) = revenueAddrA.call{value: amountA}("");
+            if (!okA) revert TransferFailed();
+        }
+        if (amountB > 0) {
+            (bool okB, ) = revenueAddrB.call{value: amountB}("");
+            if (!okB) revert TransferFailed();
+        }
+        emit RevenueWithdrawn(revenueAddrA, amountA, revenueAddrB, amountB);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -303,7 +372,7 @@ contract Shop {
     /// Versioning
     /// --------------------
     function contractVersion() external pure returns (string memory) {
-        return "1.0.0";
+        return "1.2.0";
     }
 
     /// --------------------

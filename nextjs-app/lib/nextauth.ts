@@ -2,8 +2,7 @@ import GoogleProvider from 'next-auth/providers/google'
 import GithubProvider from 'next-auth/providers/github'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import type { NextAuthOptions } from 'next-auth'
-import { cookies } from 'next/headers'
-import { verifyMessage, type Address, type Hex } from 'viem'
+// Removed unused imports (cookies, verifyMessage, Address, Hex) to satisfy eslint
 import { supabaseAdmin } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 
@@ -38,15 +37,7 @@ async function findOrCreateUserIdentity(provider: string, accountId: string, pro
   return newUser.uid
 }
 
-async function getUserUidByWallet(address: string) {
-  const { data } = await supabaseAdmin
-    .from('user_identities')
-    .select('user_uid')
-    .eq('provider', 'wallet')
-    .eq('account_id', address)
-    .single()
-  return data?.user_uid
-}
+// (Removed unused helper getUserUidByWallet)
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },

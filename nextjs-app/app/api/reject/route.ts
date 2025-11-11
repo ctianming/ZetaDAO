@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { requireAdminFromRequest, getAdminWalletFromRequest } from '@/lib/auth'
+import { requireAdminFromSession, getAdminWalletFromSession } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
     // 验证管理员权限（基于已验证的连接钱包 Cookie）
     try {
-      requireAdminFromRequest(request)
+      requireAdminFromSession(request)
     } catch (error) {
       return NextResponse.json({ error: '需要管理员权限' }, { status: 403 })
     }
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新投稿状态为已拒绝（兼容 reviewed_by 与 reviewed_by_uid）
-    const reviewerWallet = getAdminWalletFromRequest(request)
+  const reviewerWallet = getAdminWalletFromSession(request)
     let rejectErr: any = null
     {
       const { error } = await supabaseAdmin

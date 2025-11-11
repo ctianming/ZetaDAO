@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdminFromRequest } from '@/lib/auth'
+import { isAdminFromSession } from '@/lib/auth'
 
 function toCsv(rows: any[]): string {
   if (!rows.length) return ''
@@ -19,7 +19,7 @@ function toCsv(rows: any[]): string {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromSession(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const url = new URL(req.url)
   const status = url.searchParams.get('status')
   const format = url.searchParams.get('format')

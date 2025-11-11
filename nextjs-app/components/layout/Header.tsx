@@ -150,7 +150,7 @@ export default function Header() {
     } finally {
       setWalletLoading(false)
     }
-  }, [isConnected, address, openConnectModal, signMessageAsync, chainId, switchChainAsync])
+  }, [isConnected, address, openConnectModal, signMessageAsync, chainId, switchChainAsync, CHAIN_ID])
 
   const disconnectWallet = useCallback(async () => {
     try {

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { requireAdminFromRequest, getAdminWalletFromRequest } from '@/lib/auth'
+import { requireAdminFromSession, getAdminWalletFromSession } from '@/lib/auth'
+import { invalidate } from '@/lib/revalidate'
 
 export async function POST(request: NextRequest) {
   try {
     // 验证管理员权限（基于已验证的连接钱包 Cookie）
     try {
-      requireAdminFromRequest(request)
+      requireAdminFromSession(request)
     } catch (error) {
       return NextResponse.json({ error: '需要管理员权限' }, { status: 403 })
     }
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新投稿状态为已批准（兼容两套列：reviewed_by 与 reviewed_by_uid）
-    const reviewerWallet = getAdminWalletFromRequest(request)
+  const reviewerWallet = getAdminWalletFromSession(request)
     let updateErr: any = null
     {
       const { error } = await supabaseAdmin
@@ -150,6 +151,17 @@ export async function POST(request: NextRequest) {
         target_id: submissionId,
         metadata: { blockchain_hash: blockchainHash },
       })
+
+    // 按类别触发相关页面的按需再验证
+    try {
+      const cat = String(submission.category || '')
+      if (cat === 'activity') invalidate({ paths: ['/activities'] })
+      if (cat === 'article') {
+        const contentPath = published?.id ? `/articles/${published.id}` : null
+        invalidate({ paths: ['/articles', contentPath] })
+      }
+      if (cat === 'video') invalidate({ paths: ['/videos'], tags: ['videos'] })
+    } catch {}
 
     return NextResponse.json({
       success: true,

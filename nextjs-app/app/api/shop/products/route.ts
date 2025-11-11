@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { isAdminFromRequest } from '@/lib/auth'
+import { isAdminFromSession } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const includeInactive = url.searchParams.get('includeInactive') === '1'
+  const isAdmin = isAdminFromSession(req)
   const query = supabaseAdmin.from('shop_products').select('*').order('created_at', { ascending: false })
-  const { data, error } = includeInactive ? await query : await query.eq('status', 'active')
+  const { data, error } = includeInactive && isAdmin ? await query : await query.eq('status', 'active')
   if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   return NextResponse.json({ success: true, data })
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromSession(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const now = new Date().toISOString()
   const payload: any = {
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromSession(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
   const id = body.id
   if (!id) return NextResponse.json({ success: false, error: '缺少 id' }, { status: 400 })
@@ -54,7 +55,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAdminFromRequest(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+  if (!isAdminFromSession(req)) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const url = new URL(req.url)
   const id = url.searchParams.get('id')
   if (!id) return NextResponse.json({ success: false, error: '缺少 id' }, { status: 400 })
