@@ -71,12 +71,14 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   }, [])
 
   const run = useCallback(async () => {
+    console.debug('[useEnsureAdminSession] run invoked', { address, isConnected, status, running: runningRef.current })
     if (runningRef.current) return
     runningRef.current = true
     setLoading(true)
     setError(null)
     // First: check whether server already has an admin session (httpOnly cookie)
     try {
+      console.debug('[useEnsureAdminSession] fetching /api/auth/is-admin')
       const r0 = await fetch('/api/auth/is-admin', { cache: 'no-store' })
       const j0 = await r0.json().catch(() => ({}))
       if (j0?.isAdmin) {
@@ -179,6 +181,15 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       attemptsRef.current += 1
     }
   }, [address, isConnected, status, signMessageAsync, show, openConnectModal, disconnect])
+
+  // Expose a global debug hook so operators can manually trigger the flow from the browser console:
+  //   window.__zd_admin_refresh && window.__zd_admin_refresh()
+  useEffect(() => {
+    try {
+      (window as any).__zd_admin_refresh = run
+    } catch {}
+    return () => { try { delete (window as any).__zd_admin_refresh } catch {} }
+  }, [run])
 
   // 仅检查服务器 session（不触发钱包签名）。点击“开始认证”时请调用返回的 refresh()/run()
   const checkSession = useCallback(async () => {
