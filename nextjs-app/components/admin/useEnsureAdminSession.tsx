@@ -82,14 +82,14 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   }, [])
 
   const run = useCallback(async () => {
-    console.debug('[useEnsureAdminSession] run invoked', { address, isConnected, status, running: runningRef.current })
+    console.log('[useEnsureAdminSession] run invoked', { address, isConnected, status, running: runningRef.current })
     if (runningRef.current) return
     runningRef.current = true
     safeSet(setLoading, true)
     safeSet(setError, null)
     // First: check whether server already has an admin session (httpOnly cookie)
     try {
-      console.debug('[useEnsureAdminSession] fetching /api/auth/is-admin')
+      console.log('[useEnsureAdminSession] fetching /api/auth/is-admin')
       const r0 = await fetch('/api/auth/is-admin', { cache: 'no-store' })
       const j0 = await r0.json().catch(() => ({}))
       if (j0?.isAdmin) {
@@ -113,7 +113,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       try {
         await ensureProviderAuthorized()
       } catch (preErr: any) {
-        console.debug('ensureProviderAuthorized preErr', preErr)
+        console.log('ensureProviderAuthorized preErr', preErr)
         const msg = String(preErr?.message || '')
         // 未授权：提示连接；移动端尝试深链
         if (/未授权|not\s*been\s*authorized/i.test(msg) || preErr?.code === 4100 || preErr?.code === 4001) {
@@ -202,6 +202,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   useEffect(() => {
     try {
       (window as any).__zd_admin_refresh = run
+      console.log('[useEnsureAdminSession] __zd_admin_refresh assigned on window')
     } catch {}
     return () => { try { delete (window as any).__zd_admin_refresh } catch {} }
   }, [run])
