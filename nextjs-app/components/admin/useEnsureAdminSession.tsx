@@ -32,8 +32,19 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [autoPrompted, setAutoPrompted] = useState(false)
+  const mountedRef = useRef(false)
   const runningRef = useRef(false)
   const attemptsRef = useRef(0)
+
+  // Safe setter: if component not mounted yet, defer the update slightly
+  const safeSet = useCallback((setter: (v: any) => void, value: any) => {
+    if (mountedRef.current) {
+      try { setter(value) } catch {}
+    } else {
+      // defer to next tick to avoid setState during render of other components
+      setTimeout(() => { try { setter(value) } catch {} }, 0)
+    }
+  }, [])
 
   const ensureProviderAuthorized = useCallback(async () => {
     if (typeof window === 'undefined') return
@@ -74,15 +85,17 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
     console.debug('[useEnsureAdminSession] run invoked', { address, isConnected, status, running: runningRef.current })
     if (runningRef.current) return
     runningRef.current = true
-    setLoading(true)
-    setError(null)
+    safeSet(setLoading, true)
+    safeSet(setError, null)
     // First: check whether server already has an admin session (httpOnly cookie)
     try {
       console.debug('[useEnsureAdminSession] fetching /api/auth/is-admin')
       const r0 = await fetch('/api/auth/is-admin', { cache: 'no-store' })
       const j0 = await r0.json().catch(() => ({}))
       if (j0?.isAdmin) {
-        setIsAdmin(true)
+        safeSet(setIsAdmin, true)
+        runningRef.current = false
+        safeSet(setLoading, false)
         return
       }
     } catch (e) {
@@ -90,7 +103,9 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
     }
     // If no server session, require wallet connection to proceed
     if (!isConnected || status !== 'connected' || !address) {
-      setIsAdmin(false)
+      safeSet(setIsAdmin, false)
+      runningRef.current = false
+      safeSet(setLoading, false)
       return
     }
     try {
@@ -127,7 +142,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       // 1) 先检测是否已有 session
       const r0 = await fetch('/api/auth/is-admin', { cache: 'no-store' })
       const j0 = await r0.json().catch(() => ({}))
-      if (j0?.isAdmin) { setIsAdmin(true); return }
+      if (j0?.isAdmin) { safeSet(setIsAdmin, true); runningRef.current = false; safeSet(setLoading, false); return }
       // 2) 发起挑战
       const ch = await fetch('/api/auth/admin/challenge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wallet: address }) })
       const jc = await ch.json().catch(() => ({}))
@@ -169,14 +184,14 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       if (!vr.ok || !vj?.success) {
         setError(vj?.error || '签名校验失败'); setIsAdmin(false); return
       }
-      setIsAdmin(true)
+      safeSet(setIsAdmin, true)
       show('管理员认证成功', { type: 'success' })
     } catch (e: any) {
       console.error('ensure admin session error', e)
-      setError(e?.message || '管理员认证异常')
-      setIsAdmin(false)
+      safeSet(setError, e?.message || '管理员认证异常')
+      safeSet(setIsAdmin, false)
     } finally {
-      setLoading(false)
+      safeSet(setLoading, false)
       runningRef.current = false
       attemptsRef.current += 1
     }
@@ -196,15 +211,18 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
     try {
       const r = await fetch('/api/auth/is-admin', { cache: 'no-store' })
       const j = await r.json().catch(() => ({}))
-      if (j?.isAdmin) setIsAdmin(true)
-      else setIsAdmin(false)
+      if (j?.isAdmin) safeSet(setIsAdmin, true)
+      else safeSet(setIsAdmin, false)
     } catch (e) {
-      setIsAdmin(false)
+      safeSet(setIsAdmin, false)
     }
   }, [])
 
   // 在地址变化或挂载时只检查服务器端 session，不自动触发签名流程
   useEffect(() => { checkSession() }, [address, checkSession])
+
+  // track mounted state to avoid setState during other component's render
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])
 
   // 若未认证且处于未连接状态，桌面端自动拉起连接弹窗（避免直接触发未授权报错）
   useEffect(() => {
