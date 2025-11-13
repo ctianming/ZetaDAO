@@ -48,8 +48,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       try {
         accs = await eth.request({ method: 'eth_requestAccounts' })
       } catch (reqErr: any) {
-        if (reqErr?.code === 4001) throw new Error('用户取消了账户授权')
-        if (reqErr?.code === 4100) throw new Error('当前来源未授权账户访问')
+        // 抛出原始错误以便上层能基于 code 做不同处理（例如 4001 表示拒绝/未弹窗）
         throw reqErr
       }
     }
@@ -74,17 +73,34 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   const run = useCallback(async () => {
     if (runningRef.current) return
     runningRef.current = true
-    if (!isConnected || status !== 'connected' || !address) return
     setLoading(true)
     setError(null)
+    // First: check whether server already has an admin session (httpOnly cookie)
+    try {
+      const r0 = await fetch('/api/auth/is-admin', { cache: 'no-store' })
+      const j0 = await r0.json().catch(() => ({}))
+      if (j0?.isAdmin) {
+        setIsAdmin(true)
+        return
+      }
+    } catch (e) {
+      // ignore and continue to normal flow
+    }
+    // If no server session, require wallet connection to proceed
+    if (!isConnected || status !== 'connected' || !address) {
+      setIsAdmin(false)
+      return
+    }
     try {
       // 0) 强化预检：账户授权 + 链一致性
       try {
         await ensureProviderAuthorized()
       } catch (preErr: any) {
+        console.debug('ensureProviderAuthorized preErr', preErr)
         const msg = String(preErr?.message || '')
         // 未授权：提示连接；移动端尝试深链
-        if (/未授权|not\s*been\s*authorized/i.test(msg) || preErr?.code === 4100) {
+        if (/未授权|not\s*been\s*authorized/i.test(msg) || preErr?.code === 4100 || preErr?.code === 4001) {
+          // code===4001 表示钱包拒绝了账户访问或用户未看到授权弹窗，优先提示并打开连接模态
           if (isMobileUA()) {
             try {
               const { uri } = await createPairingUri()
@@ -95,7 +111,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
             try { disconnect() } catch {}
             if (openConnectModal) openConnectModal()
           }
-          setError('当前页面尚未获得钱包授权，请完成连接与授权后再试。')
+          setError(preErr?.code === 4001 ? '钱包未完成授权，请在钱包中允许账户访问并重试。' : '当前页面尚未获得钱包授权，请完成连接与授权后再试。')
           return
         }
         // 链不匹配
@@ -164,8 +180,20 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
     }
   }, [address, isConnected, status, signMessageAsync, show, openConnectModal, disconnect])
 
-  // 自动尝试一次（地址变化时重试）
-  useEffect(() => { setIsAdmin(false); if (address) run() }, [address, run])
+  // 仅检查服务器 session（不触发钱包签名）。点击“开始认证”时请调用返回的 refresh()/run()
+  const checkSession = useCallback(async () => {
+    try {
+      const r = await fetch('/api/auth/is-admin', { cache: 'no-store' })
+      const j = await r.json().catch(() => ({}))
+      if (j?.isAdmin) setIsAdmin(true)
+      else setIsAdmin(false)
+    } catch (e) {
+      setIsAdmin(false)
+    }
+  }, [])
+
+  // 在地址变化或挂载时只检查服务器端 session，不自动触发签名流程
+  useEffect(() => { checkSession() }, [address, checkSession])
 
   // 若未认证且处于未连接状态，桌面端自动拉起连接弹窗（避免直接触发未授权报错）
   useEffect(() => {

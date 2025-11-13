@@ -6,8 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --check .",
+    "pnpm:install": "pnpm install",
+    "pnpm:build": "pnpm build",
+    "pnpm:start": "pnpm start"
   },
+  "packageManager": "pnpm@8.8.0",
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@rainbow-me/rainbowkit": "^2.1.6",
