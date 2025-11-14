@@ -143,49 +143,62 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       const r0 = await fetch('/api/auth/is-admin', { cache: 'no-store' })
       const j0 = await r0.json().catch(() => ({}))
       if (j0?.isAdmin) { safeSet(setIsAdmin, true); runningRef.current = false; safeSet(setLoading, false); return }
-      // 2) 发起挑战
-      const ch = await fetch('/api/auth/admin/challenge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wallet: address }) })
-      const jc = await ch.json().catch(() => ({}))
-      if (!ch.ok || !jc?.success || !jc?.nonce) {
-        setError(jc?.error || '挑战失败'); setIsAdmin(false); return
-      }
-      const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}`
-      let signature: string
-      try {
-        signature = await signMessageAsync({ message })
-      } catch (err: any) {
-        // 处理常见“未授权来源”错误，引导用户先连接钱包
-        const msg = `${err?.message || ''}`
-        if (err?.code === 4100 || /not\s*been\s*authorized/i.test(msg)) {
-          // 优先移动端：直接通过 WalletConnect 连接并完成消息签名
-          if (isMobileUA()) {
-            try {
-              const res = await connectAndSignMessage('metamask', message)
-              signature = res.signature
-            } catch (wcErr: any) {
-              setError(wcErr?.message || '移动端签名失败，请重试或更换钱包')
+
+      const allowNoSign = String(process.env.NEXT_PUBLIC_ADMIN_ALLOW_NO_SIGN || '').toLowerCase() === 'true'
+      if (allowNoSign) {
+        // Temporary flow: do not require signature, only require connected admin wallet
+        const vr = await fetch('/api/auth/admin/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address }) })
+        const vj = await vr.json().catch(() => ({}))
+        if (!vr.ok || !vj?.success) {
+          setError(vj?.error || '校验失败'); setIsAdmin(false); return
+        }
+        safeSet(setIsAdmin, true)
+        show('管理员认证成功（无签名模式）', { type: 'success' })
+      } else {
+        // 2) 发起挑战
+        const ch = await fetch('/api/auth/admin/challenge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wallet: address }) })
+        const jc = await ch.json().catch(() => ({}))
+        if (!ch.ok || !jc?.success || !jc?.nonce) {
+          setError(jc?.error || '挑战失败'); setIsAdmin(false); return
+        }
+        const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}`
+        let signature: string
+        try {
+          signature = await signMessageAsync({ message })
+        } catch (err: any) {
+          // 处理常见“未授权来源”错误，引导用户先连接钱包
+          const msg = `${err?.message || ''}`
+          if (err?.code === 4100 || /not\s*been\s*authorized/i.test(msg)) {
+            // 优先移动端：直接通过 WalletConnect 连接并完成消息签名
+            if (isMobileUA()) {
+              try {
+                const res = await connectAndSignMessage('metamask', message)
+                signature = res.signature
+              } catch (wcErr: any) {
+                setError(wcErr?.message || '移动端签名失败，请重试或更换钱包')
+                return
+              }
+            } else {
+              try { disconnect() } catch {}
+              setError('签名被拒绝或未授权，请在重新连接后再次点击“重新认证”。')
+              if (openConnectModal) openConnectModal()
               return
             }
-          } else {
-            try { disconnect() } catch {}
-            setError('签名被拒绝或未授权，请在重新连接后再次点击“重新认证”。')
-            if (openConnectModal) openConnectModal()
+          }
+          if (err?.code === 4001) {
+            setError('已取消签名请求，可在钱包中重新尝试。')
             return
           }
+          throw err
         }
-        if (err?.code === 4001) {
-          setError('已取消签名请求，可在钱包中重新尝试。')
-          return
+        const vr = await fetch('/api/auth/admin/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, message, signature }) })
+        const vj = await vr.json().catch(() => ({}))
+        if (!vr.ok || !vj?.success) {
+          setError(vj?.error || '签名校验失败'); setIsAdmin(false); return
         }
-        throw err
+        safeSet(setIsAdmin, true)
+        show('管理员认证成功', { type: 'success' })
       }
-      const vr = await fetch('/api/auth/admin/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address, message, signature }) })
-      const vj = await vr.json().catch(() => ({}))
-      if (!vr.ok || !vj?.success) {
-        setError(vj?.error || '签名校验失败'); setIsAdmin(false); return
-      }
-      safeSet(setIsAdmin, true)
-      show('管理员认证成功', { type: 'success' })
     } catch (e: any) {
       console.error('ensure admin session error', e)
       safeSet(setError, e?.message || '管理员认证异常')
