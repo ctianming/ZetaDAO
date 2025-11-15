@@ -2,24 +2,48 @@
 
 import { useEffect, useState } from 'react'
 
-const newsItems = [
-  '<a href="https://x.com/ZetaChain_CH/status/1953664909180645384" target="_blank" rel="noopener">第三季中文大使计划正在开发申请</a>',
-  '<a href="https://x.com/ZetaChain_CH/status/1965329974250144060" target="_blank" rel="noopener">9月社区活动Gluck抽卡乐现已上线</a>',
-  '<a href="https://x.com/ZetaChain_CH/status/1963526510968762790" target="_blank" rel="noopener">ZetaChain已集成KaiaChain测试网</a>',
-  '<a href="https://x.com/ZetaChain_CH/status/1963602055924449390" target="_blank" rel="noopener">加入社区新大使见面会赢取ZETA好礼</a>',
-  '<a href="https://x.com/0xmediaco/status/1960356760344260983" target="_blank" rel="noopener">用五个问题带你看懂ZetaChain</a>',
-]
+interface Banner {
+  content: string;
+  link_url?: string | null;
+}
 
 export default function NewsTicker() {
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [banners, setBanners] = useState<Banner[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch active banners from API
+  useEffect(() => {
+    const fetchBanners = async () => {
+      try {
+        const response = await fetch('/api/banners')
+        const data = await response.json()
+        if (data.success && data.data && data.data.length > 0) {
+          setBanners(data.data)
+        }
+      } catch (error) {
+        console.error('Error fetching banners:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchBanners()
+  }, [])
 
   useEffect(() => {
+    if (banners.length === 0) return
+
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % newsItems.length)
+      setCurrentIndex((prev) => (prev + 1) % banners.length)
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [banners.length])
+
+  if (loading || banners.length === 0) {
+    return null;
+  }
 
   return (
     <div className="w-full bg-primary-500 text-white py-2 overflow-hidden">
@@ -30,12 +54,16 @@ export default function NewsTicker() {
             className="transition-transform duration-500 ease-in-out"
             style={{ transform: `translateY(-${currentIndex * 100}%)` }}
           >
-            {newsItems.map((item, index) => (
-              <div
-                key={index}
-                className="h-6 flex items-center"
-                dangerouslySetInnerHTML={{ __html: item }}
-              />
+            {banners.map((banner, index) => (
+              <div key={index} className="h-6 flex items-center truncate">
+                {banner.link_url ? (
+                  <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                    {banner.content}
+                  </a>
+                ) : (
+                  <span>{banner.content}</span>
+                )}
+              </div>
             ))}
           </div>
         </div>

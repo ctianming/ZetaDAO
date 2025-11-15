@@ -383,6 +383,21 @@ export default function Header() {
                       <span>投稿管理</span>
                       <span className="text-xs text-gray-400">→</span>
                     </Link>
+
+                    {(session as any)?.role === 'admin' && (
+                      <div className="pt-2 mt-2 border-t">
+                        <div className="px-3 py-1 text-xs font-semibold text-gray-400">管理员</div>
+                        <Link href="/admin/content" className="flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
+                          <span>内容管理</span>
+                          <span className="text-xs text-gray-400">→</span>
+                        </Link>
+                        <Link href="/admin/banners" className="flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
+                          <span>横幅管理</span>
+                          <span className="text-xs text-gray-400">→</span>
+                        </Link>
+                      </div>
+                    )}
+
                     <button onClick={() => signOut()} className="w-full text-left flex items-center justify-between text-sm px-3 py-2 rounded-lg hover:bg-gray-50">
                       <span>退出登录</span>
                       <span className="text-xs text-gray-400">↩</span>
