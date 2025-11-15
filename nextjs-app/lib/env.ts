@@ -23,6 +23,7 @@ export const db = {
  */
 export const auth = {
   secret: process.env.NEXTAUTH_SECRET || 'dev-secret',
+  url: process.env.AUTH_URL || process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   googleTimeout: parseInt(process.env.NEXTAUTH_GOOGLE_TIMEOUT_MS || '', 10) || 15000,

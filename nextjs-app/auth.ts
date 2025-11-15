@@ -180,6 +180,7 @@ providers.push(
 
 export const nextAuthConfig: NextAuthConfig = {
   trustHost: true, // 快速修复 UntrustedHost 错误，生产环境建议使用环境变量
+  basePath: '/api/auth',
   session: { strategy: 'jwt' },
   pages: {
     error: '/auth/error',
