@@ -7,12 +7,12 @@ export const dynamic = 'force-dynamic'
 
 async function getFollowing(uid: string) {
   try {
-    const { data, error } = await supabase.from('user_follows').select('following_uid').eq('follower_uid', uid)
-    if (error) return []
-    const ids = data.map((r:any)=>r.following_uid)
-    if (ids.length === 0) return []
-    const { data: users } = await supabase.from('users').select('uid,username,xp_total').in('uid', ids)
-    return users || []
+  const { data, error } = await supabase.from('user_follows').select('following_uid').eq('follower_uid', uid)
+  if (error) return []
+  const ids = data.map((r:any)=>r.following_uid)
+  if (ids.length === 0) return []
+  const { data: users } = await supabase.from('users').select('uid,username,xp_total').in('uid', ids)
+  return users || []
   } catch (e) {
     console.error('Error in getFollowing:', e)
     return []

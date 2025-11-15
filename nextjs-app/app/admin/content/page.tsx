@@ -32,18 +32,83 @@ type Ambassador = {
   status?: string
 }
 
+type Article = {
+  id: string
+  title: string
+  content?: string
+  image_url?: string | null
+  tags?: string[]
+  published_at?: string
+  author_name?: string
+  article_category?: string
+}
+
 export default function AdminContentPage() {
   const { address, isConnected, status } = useAccount()
   const { isAdmin, loading: authLoading, error: authError, refresh: refreshAdmin } = useEnsureAdminSession()
   const { show } = useToast()
-  const [tab, setTab] = useState<'videos' | 'ambassadors'>('videos')
+  const [tab, setTab] = useState<'articles' | 'videos' | 'ambassadors'>('articles')
   const [loading, setLoading] = useState(false)
+  const [articles, setArticles] = useState<Article[]>([])
   const [videos, setVideos] = useState<Video[]>([])
   const [ambassadors, setAmbassadors] = useState<Ambassador[]>([])
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+  const [totalCount, setTotalCount] = useState(0)
   const [videoForm, setVideoForm] = useState<Partial<Video>>({})
   const [ambForm, setAmbForm] = useState<Partial<Ambassador>>({ status: 'active' })
   const [searchQ, setSearchQ] = useState('')
   const [mounted, setMounted] = useState(false)
+
+  // Category filter state
+  const [articleCategories, setArticleCategories] = useState<{ slug: string; name: string }[]>([])
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
+
+  // Sorting state
+  const [sortBy, setSortBy] = useState('published_at')
+  const [sortOrder, setSortOrder] = useState('desc')
+
+  const loadArticles = async (page = currentPage) => {
+    setLoading(true)
+    try {
+      let url = `/api/admin/published?type=article&page=${page}&limit=${itemsPerPage}&sortBy=${sortBy}&sortOrder=${sortOrder}`
+      if (searchQ) url += `&q=${encodeURIComponent(searchQ)}`
+      if (selectedCategory) url += `&category=${encodeURIComponent(selectedCategory)}`
+      if (authorFilter) url += `&author=${encodeURIComponent(authorFilter)}`
+      const res = await fetch(url)
+      const j = await res.json()
+      if (j.success) {
+        setArticles(j.data)
+        setTotalCount(j.count || 0)
+      } else {
+        show(j.error || '文章加载失败', { type: 'error' })
+      }
+    } catch (e: any) {
+      show(e.message || '文章加载异常', { type: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage)
+    loadArticles(newPage)
+  }
+
+  const loadArticleCategories = async () => {
+    try {
+      const res = await fetch('/api/categories')
+      const j = await res.json()
+      if (j.success) {
+        setArticleCategories(j.data || [])
+      }
+    } catch (e) {
+      console.error('Failed to load article categories', e)
+    }
+  }
 
   const loadVideos = async () => {
     setLoading(true)
@@ -74,7 +139,12 @@ export default function AdminContentPage() {
   useEffect(() => {
     if (!mounted) return
     if (!isAdmin) return
-    if (tab === 'videos') loadVideos(); else loadAmbassadors()
+    if (tab === 'articles') {
+      loadArticles();
+      loadArticleCategories();
+    }
+    else if (tab === 'videos') loadVideos(); 
+    else loadAmbassadors()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, isAdmin, tab])
 
@@ -152,6 +222,22 @@ export default function AdminContentPage() {
 
   const editVideo = (v: Video) => setVideoForm({ ...v })
   const editAmb = (a: Ambassador) => setAmbForm({ ...a })
+
+  const delArticle = async (a: Article) => {
+    if (!confirm(`确认删除文章「${a.title}」? 此操作不可撤销。`)) return
+    try {
+      const res = await fetch(`/api/admin/published/${a.id}`, { method: 'DELETE' })
+      const j = await res.json()
+      if (!j.success) {
+        show(j.error || '删除失败', { type: 'error' })
+        return
+      }
+      show('文章已删除', { type: 'success' })
+      setArticles(prev => prev.filter(p => p.id !== a.id))
+    } catch (e: any) {
+      show(e.message || '删除异常', { type: 'error' })
+    }
+  }
 
   const delVideo = async (v: Video) => {
     if (!confirm(`删除视频「${v.title}」?`)) return
@@ -249,6 +335,62 @@ export default function AdminContentPage() {
     </div>
   )
 
+  const PaginationControls = ({ onPageChange }: { onPageChange: (page: number) => void }) => {
+    const totalPages = Math.ceil(totalCount / itemsPerPage);
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex items-center justify-between mt-4">
+        <span className="text-sm text-gray-600">
+          共 {totalCount} 条记录，第 {currentPage} / {totalPages} 页
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-3 py-1 rounded border text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            上一页
+          </button>
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 rounded border text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const articleList = (
+    <div className="space-y-4">
+      {loading && articles.length === 0 ? <div className="text-sm text-gray-500">加载中...</div> : null}
+      {articles.length === 0 && !loading ? <div className="text-sm text-gray-500 py-10 text-center">暂无已发布的文章</div> : null}
+      {articles.map(a => (
+        <div key={a.id} className="flex items-center gap-4 p-4 border rounded-xl bg-white shadow-sm">
+          <div className="w-28 h-16 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center relative">
+            {a.image_url ? (
+              <Image src={a.image_url} alt={a.title} fill unoptimized className="object-cover" />
+            ) : (
+              <span className="text-xs text-gray-500">无封面</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold line-clamp-1">{a.title}</div>
+            <div className="text-xs text-gray-500">作者: {a.author_name || 'N/A'}</div>
+            {a.tags?.length ? <div className="mt-1 flex flex-wrap gap-1">{a.tags.map(t => <span key={t} className="px-2 py-0.5 bg-primary-50 text-primary-700 text-[11px] rounded">{t}</span>)}</div> : null}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>delArticle(a)} className="px-3 py-1 rounded border text-xs text-red-600">删除</button>
+          </div>
+        </div>
+      ))}
+      {tab === 'articles' && <PaginationControls onPageChange={handlePageChange} />}
+    </div>
+  )
+
   const videoList = (
     <div className="space-y-4">
       {loading && videos.length === 0 ? <div className="text-sm text-gray-500">加载中...</div> : null}
@@ -333,10 +475,55 @@ export default function AdminContentPage() {
 
   const searchBar = (
     <div className="mb-4 flex items-center gap-2">
-      <input className="flex-1 border rounded-lg px-3 py-2" placeholder={tab==='videos'?'搜索视频标题/内容':'搜索大使姓名/简介'} value={searchQ} onChange={e=>setSearchQ(e.target.value)} />
+      <input 
+        className="flex-1 border rounded-lg px-3 py-2" 
+        placeholder={
+          tab === 'articles' ? '搜索文章标题/内容' :
+          tab === 'videos' ? '搜索视频标题/内容' : 
+          '搜索大使姓名/简介'
+        } 
+        value={searchQ} 
+        onChange={e=>setSearchQ(e.target.value)} 
+      />
+      {tab === 'articles' && (
+        <select
+          value={selectedCategory}
+          onChange={(e) => {
+            setSelectedCategory(e.target.value);
+            setCurrentPage(1);
+            loadArticles(1);
+          }}
+          className="border rounded-lg px-3 py-2 bg-white"
+        >
+          <option value="">所有分类</option>
+          {articleCategories.map(cat => (
+            <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+          ))}
+        </select>
+      )}
+      <select
+        value={`${sortBy}-${sortOrder}`}
+        onChange={(e) => {
+          const [newSortBy, newSortOrder] = e.target.value.split('-');
+          setSortBy(newSortBy);
+          setSortOrder(newSortOrder);
+          setCurrentPage(1);
+          loadArticles(1);
+        }}
+        className="border rounded-lg px-3 py-2 bg-white"
+      >
+        <option value="published_at-desc">最新发布</option>
+        <option value="published_at-asc">最早发布</option>
+        <option value="title-asc">标题 (A-Z)</option>
+        <option value="title-desc">标题 (Z-A)</option>
+      </select>
+
       <button
         onClick={()=>{
-          if (tab === 'videos') {
+          setCurrentPage(1)
+          if (tab === 'articles') {
+            loadArticles(1)
+          } else if (tab === 'videos') {
             loadVideos()
           } else {
             loadAmbassadors()
@@ -344,10 +531,22 @@ export default function AdminContentPage() {
         }}
         className="px-4 py-2 rounded-lg bg-primary-600 text-white"
       >搜索</button>
+      <input
+        className="border rounded-lg px-3 py-2" 
+        placeholder="按作者筛选"
+        value={authorFilter} 
+        onChange={e=>setAuthorFilter(e.target.value)} 
+      />
+
       <button
         onClick={()=>{
           setSearchQ('')
-          if (tab === 'videos') {
+          setSelectedCategory('')
+          setAuthorFilter('')
+          setCurrentPage(1)
+          if (tab === 'articles') {
+            loadArticles(1)
+          } else if (tab === 'videos') {
             loadVideos()
           } else {
             loadAmbassadors()
@@ -366,17 +565,26 @@ export default function AdminContentPage() {
           <h1 className="text-3xl font-bold mb-6">内容管理</h1>
           <p className="text-xs text-gray-500 mb-4">支持视频封面自动解析（YouTube 与 Bilibili），以及大使贡献与活动数快捷调整。</p>
           <div className="flex gap-3 mb-8">
-            <button onClick={()=>setTab('videos')} className={`px-4 py-2 rounded-full text-sm ${tab==='videos'?'bg-primary-600 text-white':'bg-white border'}`}>视频</button>
-            <button onClick={()=>setTab('ambassadors')} className={`px-4 py-2 rounded-full text-sm ${tab==='ambassadors'?'bg-primary-600 text-white':'bg-white border'}`}>大使</button>
+            <button onClick={() => { setTab('articles'); setCurrentPage(1); setSearchQ(''); }} className={`px-4 py-2 rounded-full text-sm ${tab === 'articles' ? 'bg-primary-600 text-white' : 'bg-white border'}`}>文章</button>
+            <button onClick={() => { setTab('videos'); setCurrentPage(1); setSearchQ(''); }} className={`px-4 py-2 rounded-full text-sm ${tab === 'videos' ? 'bg-primary-600 text-white' : 'bg-white border'}`}>视频</button>
+            <button onClick={() => { setTab('ambassadors'); setCurrentPage(1); setSearchQ(''); }} className={`px-4 py-2 rounded-full text-sm ${tab === 'ambassadors' ? 'bg-primary-600 text-white' : 'bg-white border'}`}>大使</button>
           </div>
           {searchBar}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1 bg-white rounded-2xl p-5 border shadow-sm">
-              <div className="text-lg font-semibold mb-4">{tab==='videos' ? (videoForm.id?'编辑视频':'创建视频') : (ambForm.id?'编辑大使':'创建大使')}</div>
-              {tab==='videos' ? renderVideoForm() : renderAmbForm()}
+              <div className="text-lg font-semibold mb-4">
+                {tab === 'articles' ? '文章管理' : 
+                 tab === 'videos' ? (videoForm.id ? '编辑视频' : '创建视频') : 
+                 (ambForm.id ? '编辑大使' : '创建大使')}
+              </div>
+              {tab === 'articles' && <p className='text-sm text-gray-600'>文章的创建和编辑在其各自的页面完成。这里只提供已发布文章的管理功能。</p>}
+              {tab === 'videos' && renderVideoForm()}
+              {tab === 'ambassadors' && renderAmbForm()}
             </div>
             <div className="md:col-span-2">
-              {tab==='videos' ? videoList : ambList}
+              {tab === 'articles' ? articleList : 
+               tab === 'videos' ? videoList : 
+               ambList}
             </div>
           </div>
         </div>

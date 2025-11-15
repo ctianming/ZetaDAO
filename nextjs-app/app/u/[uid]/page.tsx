@@ -12,9 +12,9 @@ export const dynamic = 'force-dynamic'
 
 async function getUser(uid: string) {
   try {
-    const { data, error } = await supabase.from('users').select('uid,username,avatar_url,bio,xp_total,created_at').eq('uid', uid).single()
-    if (error) return null
-    return data
+  const { data, error } = await supabase.from('users').select('uid,username,avatar_url,bio,xp_total,created_at').eq('uid', uid).single()
+  if (error) return null
+  return data
   } catch (e) {
     console.error('Error in getUser:', e)
     return null
@@ -23,8 +23,8 @@ async function getUser(uid: string) {
 
 async function getArticles(uid: string) {
   try {
-    const { data, error } = await supabase.from('published_content').select('*').eq('author_uid', uid).eq('category','article').order('published_at', { ascending: false }).limit(6)
-    if (error) return []
+  const { data, error } = await supabase.from('published_content').select('*').eq('author_uid', uid).eq('category','article').order('published_at', { ascending: false }).limit(6)
+  if (error) return []
     return mapPublishedRows(data || [])
   } catch (e) {
     console.error('Error in getArticles:', e)
