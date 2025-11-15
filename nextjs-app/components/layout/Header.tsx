@@ -461,28 +461,45 @@ export default function Header() {
                         onSubmit={async (e) => {
                           e.preventDefault()
                           const fd = new FormData(e.currentTarget as HTMLFormElement)
-                          const identifier = String(fd.get('identifier') || '')
+                          const identifier = String(fd.get('identifier') || '').trim()
                           const password = String(fd.get('password') || '')
-                          setFormLoading(true)
-                          setLoginError('')
                           
-                          // Use 'credentials' provider (not 'password')
-                          const res = await signIn('credentials', { 
-                            identifier, 
-                            password, 
-                            redirect: false 
-                          })
-                          
-                          if (res?.error) {
-                            setLoginError('账号或密码错误，或邮箱未验证')
-                            setFormLoading(false)
+                          if (!identifier || !password) {
+                            setLoginError('请输入邮箱和密码')
                             return
                           }
                           
-                          // Login successful
-                          setLoginOpen(false)
-                          setFormLoading(false)
-                          window.location.reload() // Refresh to update session
+                          setFormLoading(true)
+                          setLoginError('')
+                          
+                          try {
+                            // Use 'credentials' provider (not 'password')
+                            const res = await signIn('credentials', { 
+                              identifier, 
+                              password, 
+                              redirect: false 
+                            })
+                            
+                            if (res?.error) {
+                              setLoginError('账号或密码错误，或邮箱未验证')
+                              setFormLoading(false)
+                              return
+                            }
+                            
+                            if (res?.ok) {
+                              // Login successful
+                              setLoginOpen(false)
+                              setFormLoading(false)
+                              window.location.reload() // Refresh to update session
+                            } else {
+                              setLoginError('登录失败，请重试')
+                              setFormLoading(false)
+                            }
+                          } catch (err) {
+                            console.error('[Login Error]', err)
+                            setLoginError('登录失败，请检查网络连接')
+                            setFormLoading(false)
+                          }
                         }}
                         className="space-y-3"
                       >

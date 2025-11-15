@@ -185,13 +185,9 @@ if (process.env.NODE_ENV === 'production' && !process.env.AUTH_URL && !process.e
 }
 
 export const nextAuthConfig: NextAuthConfig = {
-  trustHost: true, // 快速修复 UntrustedHost 错误，生产环境建议使用环境变量
+  trustHost: true,
   basePath: '/api/auth',
   session: { strategy: 'jwt' },
-  pages: {
-    error: '/auth/error',
-    signIn: '/auth/error',
-  },
   providers,
   callbacks: {
     async jwt({ token, user, account, profile }) {

@@ -1,4 +1,4 @@
-# 紧急修复：UnknownAction 错误
+# 紧急修复：NextAuth 认证错误
 
 ## 问题说明
 
@@ -6,9 +6,14 @@
 ```
 [auth][error] UnknownAction: Cannot parse action at /api/auth/_log
 [auth][error] UnknownAction: Unsupported action
+[next-auth][error][CLIENT_FETCH_ERROR] Cannot convert undefined or null to object
+/api/auth/_log:1 Failed to load resource: the server responded with a status of 400
 ```
 
-**根本原因**：NextAuth.js 在生产环境中无法确定您的网站 URL，导致无法正确解析认证请求。
+**根本原因**：
+1. NextAuth.js 在生产环境中无法确定您的网站 URL
+2. NextAuth v5 beta 的客户端错误日志功能有 bug
+3. 自定义错误页面显示了错误的提示信息
 
 ---
 
@@ -33,6 +38,21 @@ if (process.env.NODE_ENV === 'production' && !process.env.AUTH_URL && !process.e
   console.log('[Auth] Setting AUTH_URL from config:', authConfig.url)
 }
 ```
+
+### 3. 删除了误导性的错误页面
+- 删除了 `app/auth/error/page.tsx`
+- 移除了 NextAuth 配置中的自定义错误页面设置
+- 现在登录失败会直接在登录框中显示错误信息
+
+### 4. 创建自定义 `_log` 端点
+- 新增 `app/api/auth/_log/route.ts`
+- 拦截并处理 NextAuth 客户端的错误日志请求
+- 避免 400 错误和控制台报错
+
+### 5. 改进登录表单错误处理
+- 添加了 try-catch 包裹
+- 添加了输入验证
+- 改进了错误提示信息
 
 ---
 
