@@ -17,19 +17,19 @@ export async function POST(req: NextRequest) {
     }
     const nonce = '0x' + crypto.randomBytes(16).toString('hex')
     const timestamp = Date.now()
-    const expiresAt = timestamp + 5 * 60 * 1000 // 5 minutes
+    const expiresAt = timestamp + 15 * 60 * 1000 // 15 minutes
     
     // Store nonce with metadata for enhanced security
     const nonceData = JSON.stringify({ nonce, timestamp, expiresAt })
     
     const res = NextResponse.json({ success: true, nonce, timestamp, expiresAt })
-    // Bind nonce to wallet via cookie; short ttl (5 min). Replace previous if any.
+    // Bind nonce to wallet via cookie; ttl (15 min). Replace previous if any.
     res.cookies.set(`admin_nonce_${lower}`, nonceData, {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       path: '/',
-      maxAge: 300,
+      maxAge: 900, // 15 minutes
     })
     return res
   } catch (e) {

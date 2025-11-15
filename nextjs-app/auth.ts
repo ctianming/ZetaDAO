@@ -23,8 +23,8 @@ if (!authConfig.githubClientId || !authConfig.githubClientSecret) {
   console.warn('⚠️  [NextAuth] GitHub OAuth credentials not configured. GitHub sign-in will be disabled.')
 }
 
-// Helper: find or create user & identity
-async function findOrCreateUserIdentity(provider: string, accountId: string, profile?: any) {
+// Helper: find existing user by OAuth identity (DO NOT auto-create)
+async function findUserByOAuthIdentity(provider: string, accountId: string) {
   if (!accountId) return null
   // Try existing identity
   const { data: ident } = await supabaseAdmin
@@ -36,21 +36,36 @@ async function findOrCreateUserIdentity(provider: string, accountId: string, pro
   if (ident?.user_uid) {
     return ident.user_uid
   }
+  // DO NOT auto-create - require registration first
+  return null
+}
+
+// Helper: create user & identity (used after registration)
+async function createUserWithIdentity(provider: string, accountId: string, profile?: any) {
+  if (!accountId) return null
+  
   // Create base user row
   const baseUser = {
     uid: undefined,
     username: null,
-    wallet_address: provider === 'wallet' ? accountId : null,
+    wallet_address: null, // Wallet is decoupled from account
     avatar_url: profile?.picture || profile?.avatar_url || null,
     bio: null,
   }
   const { data: newUser, error: userErr } = await supabaseAdmin
     .from('users')
     .insert(baseUser)
-    .select('uid,wallet_address')
+    .select('uid')
     .single()
   if (userErr || !newUser?.uid) throw new Error('Failed to create user')
-  await supabaseAdmin.from('user_identities').insert({ user_uid: newUser.uid, provider, account_id: accountId })
+  
+  // Create identity
+  await supabaseAdmin.from('user_identities').insert({ 
+    user_uid: newUser.uid, 
+    provider, 
+    account_id: accountId 
+  })
+  
   return newUser.uid
 }
 
@@ -63,7 +78,8 @@ if (authConfig.googleClientId && authConfig.googleClientSecret) {
     Google({
       clientId: authConfig.googleClientId,
       clientSecret: authConfig.googleClientSecret,
-      allowDangerousEmailAccountLinking: true,
+      // Do NOT allow automatic account linking - require explicit registration
+      allowDangerousEmailAccountLinking: false,
     })
   )
 } else {
@@ -76,18 +92,19 @@ if (authConfig.githubClientId && authConfig.githubClientSecret) {
     GitHub({
       clientId: authConfig.githubClientId,
       clientSecret: authConfig.githubClientSecret,
-      allowDangerousEmailAccountLinking: true,
+      // Do NOT allow automatic account linking - require explicit registration
+      allowDangerousEmailAccountLinking: false,
     })
   )
 } else {
   console.log('ℹ️  [NextAuth] Skipping GitHub provider (credentials not configured)')
 }
 
-// Always add Credentials provider (password-based auth)
+// Always add Credentials provider (email/password auth only)
 providers.push(
   Credentials({
-      id: 'password',
-      name: 'password',
+      id: 'credentials',
+      name: 'Email and Password',
       credentials: {
         identifier: { label: 'Email', type: 'text' },
         password: { label: 'Password', type: 'password' },
@@ -95,18 +112,41 @@ providers.push(
       async authorize(credentials) {
         const identifier = credentials?.identifier?.toString().toLowerCase().trim()
         const password = credentials?.password?.toString() || ''
-        if (!identifier || !password) return null
-        // Find by email only in local auth table (usernames may be non-unique)
-        const { data: user } = await supabaseAdmin
+        
+        if (!identifier || !password) {
+          console.log('[Auth] Missing identifier or password')
+          return null
+        }
+        
+        // Find by email in local auth table
+        const { data: user, error: userError } = await supabaseAdmin
           .from('auth_local_users')
           .select('*')
           .eq('email', identifier)
-          .limit(1)
-          .single()
-        if (!user || !user.password_hash) return null
-        if (!user.email_verified_at) return null
-        const ok = await bcrypt.compare(password, user.password_hash)
-        if (!ok) return null
+          .maybeSingle()
+        
+        if (userError) {
+          console.error('[Auth] Database error:', userError)
+          return null
+        }
+        
+        if (!user || !user.password_hash) {
+          console.log('[Auth] User not found or no password hash')
+          return null
+        }
+        
+        if (!user.email_verified_at) {
+          console.log('[Auth] Email not verified')
+          return null
+        }
+        
+        // Verify password
+        const passwordMatch = await bcrypt.compare(password, user.password_hash)
+        if (!passwordMatch) {
+          console.log('[Auth] Password mismatch')
+          return null
+        }
+        
         // Map to primary user uid via identity (email provider)
         let uid: string | null = null
         const { data: ident } = await supabaseAdmin
@@ -114,18 +154,32 @@ providers.push(
           .select('user_uid')
           .eq('provider', 'email')
           .eq('account_id', user.email)
-          .single()
-        if (ident?.user_uid) uid = ident.user_uid
-        if (!uid) {
-          uid = await findOrCreateUserIdentity('email', user.email, { avatar_url: null })
+          .maybeSingle()
+        
+        if (ident?.user_uid) {
+          uid = ident.user_uid
+        } else {
+          // Create user and identity if not exists
+          uid = await createUserWithIdentity('email', user.email, { avatar_url: null })
         }
-        if (!uid) return null
-        return { id: uid as string, name: user.username || user.email, email: user.email }
+        
+        if (!uid) {
+          console.log('[Auth] Failed to get or create user uid')
+          return null
+        }
+        
+        console.log('[Auth] Credentials login successful for:', user.email)
+        return { 
+          id: uid as string, 
+          name: user.username || user.email, 
+          email: user.email 
+        }
       },
     })
 )
 
 export const nextAuthConfig: NextAuthConfig = {
+  trustHost: true, // 快速修复 UntrustedHost 错误，生产环境建议使用环境变量
   session: { strategy: 'jwt' },
   pages: {
     error: '/auth/error',
@@ -134,56 +188,74 @@ export const nextAuthConfig: NextAuthConfig = {
   providers,
   callbacks: {
     async jwt({ token, user, account, profile }) {
-      // If provider OAuth (google/github), handle identity
+      // If provider OAuth (google/github), check if user exists
       if (account && (account.provider === 'google' || account.provider === 'github')) {
         const provider = account.provider
         const accountId = (profile as any)?.sub || (profile as any)?.id || ''
+        const email = (profile as any)?.email || ''
+        
         if (accountId) {
-          // get or create identity
-          let userUid: string | null = null
-          const { data: existing } = await supabaseAdmin
-            .from('user_identities')
-            .select('user_uid')
-            .eq('provider', provider)
-            .eq('account_id', accountId)
-            .maybeSingle()
-          if (existing?.user_uid) {
-            userUid = existing.user_uid
+          // Check if identity exists
+          const userUid = await findUserByOAuthIdentity(provider, accountId)
+          
+          if (userUid) {
+            // User exists, login successful
+            token.uid = userUid
+            token.email = email
+            console.log(`[Auth] ${provider} login successful for existing user`)
           } else {
-            userUid = await findOrCreateUserIdentity(provider, accountId, profile)
-            ;(token as any).newWalletUser = true
+            // User does not exist - require registration
+            console.log(`[Auth] ${provider} account not registered, blocking login`)
+            token.error = 'OAuthAccountNotLinked'
+            token.errorMessage = `此 ${provider === 'google' ? 'Google' : 'GitHub'} 账号尚未注册，请先注册账号`
+            // Do not set token.uid - this will prevent session creation
           }
-          token.uid = userUid
         }
       }
-      // Credentials user object has id = uid now
-      if (user?.id && !token.uid) token.uid = user.id as string
-      if ((user as any)?.walletAddress) token.walletAddress = (user as any).walletAddress
-      if ((user as any)?.newWalletUser) (token as any).newWalletUser = true
-      if (!token.email && (user as any)?.email) token.email = (user as any).email
-      if (!token.email && (profile as any)?.email) token.email = (profile as any).email
+      
+      // Credentials user object has id = uid
+      if (user?.id && !token.uid) {
+        token.uid = user.id as string
+      }
+      
+      // Preserve email
+      if (!token.email && (user as any)?.email) {
+        token.email = (user as any).email
+      }
+      
       return token
     },
     async session({ session, token }) {
-      if (token?.uid) (session as any).uid = token.uid
-      if (token?.walletAddress) (session as any).walletAddress = token.walletAddress
-      if ((token as any)?.newWalletUser) (session as any).newWalletUser = true
-      // hydrate username / profile
-      try {
-        if (token?.uid) {
+      // Handle OAuth errors
+      if ((token as any)?.error) {
+        (session as any).error = (token as any).error
+        (session as any).errorMessage = (token as any).errorMessage
+        // Return session without uid to indicate failed auth
+        return session
+      }
+      
+      if (token?.uid) {
+        (session as any).uid = token.uid
+        
+        // Hydrate username / profile
+        try {
           const { data } = await supabaseAdmin
             .from('users')
             .select('username,avatar_url,bio,xp_total')
             .eq('uid', token.uid)
             .single()
+          
           // Ensure session.user exists
           if (!session.user) (session as any).user = { name: undefined, email: undefined }
           if (data?.username) (session as any).user.name = data.username
           if (data?.avatar_url) (session as any).avatarUrl = data.avatar_url
           if (data?.bio) (session as any).bio = data.bio
           if (typeof data?.xp_total === 'number') (session as any).xpTotal = data.xp_total
+        } catch (err) {
+          console.error('[Auth] Failed to hydrate user profile:', err)
         }
-      } catch {}
+      }
+      
       return session
     },
   },
@@ -191,4 +263,5 @@ export const nextAuthConfig: NextAuthConfig = {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth(nextAuthConfig)
+
 

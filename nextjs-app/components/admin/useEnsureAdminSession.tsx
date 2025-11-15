@@ -203,11 +203,14 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
         // 2) 发起挑战
         const ch = await fetch('/api/auth/admin/challenge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wallet: address }) })
         const jc = await ch.json().catch(() => ({}))
-        if (!ch.ok || !jc?.success || !jc?.nonce) {
-          setError(jc?.error || '挑战失败'); setIsAdmin(false); return
+        // 严格验证：必须包含 nonce, timestamp, expiresAt 三个字段
+        if (!ch.ok || !jc?.success || !jc?.nonce || !jc?.timestamp || !jc?.expiresAt) {
+          console.error('[Admin Auth] 挑战响应不完整:', jc)
+          setError(jc?.error || '挑战失败：服务器响应不完整'); setIsAdmin(false); return
         }
         // Build message with timestamp for enhanced security
         const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}\nTimestamp: ${jc.timestamp}\nExpires: ${jc.expiresAt}`
+        console.log('[Admin Auth] 构建的签名消息:', message)
         let signature: string
         try {
           signature = await signMessageAsync({ message })
@@ -247,7 +250,11 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       }
     } catch (e: any) {
       console.error('ensure admin session error', e)
-      safeSet(setError, e?.message || '管理员认证异常')
+      // Detect network errors (Failed to fetch) and provide a more specific message.
+      const errorMessage = (e instanceof TypeError && e.message === 'Failed to fetch')
+        ? '网络请求失败，请检查您的网络连接并重试。'
+        : (e?.message || '管理员认证异常')
+      safeSet(setError, errorMessage)
       safeSet(setIsAdmin, false)
     } finally {
       safeSet(setLoading, false)

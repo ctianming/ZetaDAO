@@ -3,7 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import Header from '@/components/layout/Header'
+import dynamicImport from 'next/dynamic'
+
+const Header = dynamicImport(() => import('@/components/layout/Header'), { ssr: false })
 
 export default function NotFound() {
   return (

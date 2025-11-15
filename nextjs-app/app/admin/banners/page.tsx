@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useAccount } from 'wagmi'
+// Removed unused import: useAccount
 import { useCallback, useEffect, useState } from 'react'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 import Header from '@/components/layout/Header'
@@ -20,7 +20,7 @@ interface Banner {
 }
 
 export default function AdminBannersPage() {
-  const { isAdmin, loading: authLoading, error: authError, refresh: refreshAdmin } = useEnsureAdminSession()
+  const { isAdmin, loading: authLoading } = useEnsureAdminSession()
   const { show } = useToast()
 
   const [banners, setBanners] = useState<Banner[]>([])

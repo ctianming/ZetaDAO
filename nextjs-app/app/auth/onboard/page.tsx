@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 
 import Header from '@/components/layout/Header'
 import { useSession } from 'next-auth/react'
-import { signIn } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -74,8 +73,8 @@ export default function OnboardPage() {
       const j2 = await r2.json()
       if (!j2?.success) { setError(j2?.error || '保存用户名失败'); return }
       setStep('done')
-      // 重新拉取 session（可选）
-      await signIn('password', { redirect: false })
+      // Refresh session to update user data
+      window.location.reload()
     } finally { setLoading(false) }
   }
 

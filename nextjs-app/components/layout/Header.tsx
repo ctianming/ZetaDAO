@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
-import { signIn, signOut, useSession, getCsrfToken } from 'next-auth/react'
+import { signIn, signOut, useSession } from 'next-auth/react'
 import { useAccount, useChainId, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi'
 import { Menu, X, Wind, Star, Clock, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -42,10 +42,19 @@ export default function Header() {
       walletTimeoutRef.current = null
     }
   }, [walletTimeoutRef])
-  // decoupled: no wallet binding to user account anymore
-  const bindPendingWallet = useCallback(async () => true, [])
+  // decoupled: no wallet binding to user account anymore (removed unused function)
   const router = useRouter()
   const [miniQ, setMiniQ] = useState('')
+  const [oauthError, setOauthError] = useState<string | null>(null)
+
+  // Check for OAuth errors in session
+  useEffect(() => {
+    if ((session as any)?.error === 'OAuthAccountNotLinked') {
+      setOauthError((session as any)?.errorMessage || '此账号尚未注册')
+      setLoginOpen(true)
+      setAuthTab('signup')
+    }
+  }, [session])
 
   useEffect(() => {
     if (!registerSent) return
@@ -456,19 +465,24 @@ export default function Header() {
                           const password = String(fd.get('password') || '')
                           setFormLoading(true)
                           setLoginError('')
-                          const res = await signIn('password', { identifier, password, redirect: false })
+                          
+                          // Use 'credentials' provider (not 'password')
+                          const res = await signIn('credentials', { 
+                            identifier, 
+                            password, 
+                            redirect: false 
+                          })
+                          
                           if (res?.error) {
                             setLoginError('账号或密码错误，或邮箱未验证')
                             setFormLoading(false)
                             return
                           }
-                          const boundOk = await bindPendingWallet()
-                          if (!boundOk) {
-                            setFormLoading(false)
-                            return
-                          }
+                          
+                          // Login successful
                           setLoginOpen(false)
                           setFormLoading(false)
+                          window.location.reload() // Refresh to update session
                         }}
                         className="space-y-3"
                       >
@@ -570,34 +584,10 @@ export default function Header() {
                   {/* 右侧：Google 登录（钱包登录已移除）*/}
                   <div className="p-6 bg-gray-50 border-l">
                     <div className="text-sm text-gray-600 mb-3">第三方快速登录</div>
+                    {oauthError && <div className="text-red-600 text-xs mb-3">{oauthError}</div>}
                     <div className="space-y-3">
                       <button
-                        onClick={async () => {
-                          try {
-                            // 直接 POST 至 NextAuth provider endpoint，绕过中间页面脚本依赖
-                            const csrfToken = await getCsrfToken()
-                            const form = document.createElement('form')
-                            form.method = 'POST'
-                            form.action = '/api/auth/signin/google'
-                            const csrf = document.createElement('input')
-                            csrf.type = 'hidden'
-                            csrf.name = 'csrfToken'
-                            csrf.value = csrfToken || ''
-                            const cb = document.createElement('input')
-                            cb.type = 'hidden'
-                            cb.name = 'callbackUrl'
-                            cb.value = (typeof window !== 'undefined' ? `${window.location.origin}/` : '/')
-                            form.appendChild(csrf)
-                            form.appendChild(cb)
-                            document.body.appendChild(form)
-                            form.submit()
-                            setLoginOpen(false)
-                          } catch {
-                            // 退回到默认方式
-                            setLoginOpen(false)
-                            await signIn('google')
-                          }
-                        }}
+                        onClick={() => signIn('google')}
                         className="w-full text-left px-3 py-2 rounded-lg border hover:bg-white"
                       >
                         使用 Google 登录

@@ -126,7 +126,7 @@ export default function AdminPage() {
               </div>
               <button onClick={() => router.push('/admin/ambassadors')} className="px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700">进入</button>
             </div>
-            <div className="bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between md:col-span-3">
+            <div className="bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between">
               <div>
                 <div className="text-xl font-semibold mb-1">投稿审核</div>
                 <div className="text-sm text-gray-600 mb-4">用户投稿审核与分类管理（创建/修改/删除）</div>
@@ -134,6 +134,20 @@ export default function AdminPage() {
               <div>
                 <button onClick={() => router.push('/admin/moderation')} className="px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700">进入</button>
               </div>
+            </div>
+            <div className="bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="text-xl font-semibold mb-1">已发布内容</div>
+                <div className="text-sm text-gray-600 mb-4">查看和删除所有已发布的文章、视频和活动</div>
+              </div>
+              <button onClick={() => router.push('/admin/published')} className="px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700">进入</button>
+            </div>
+            <div className="bg-white rounded-2xl p-6 border shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="text-xl font-semibold mb-1">横幅管理</div>
+                <div className="text-sm text-gray-600 mb-4">管理首页横幅通知的创建、编辑和删除</div>
+              </div>
+              <button onClick={() => router.push('/admin/banners')} className="px-4 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700">进入</button>
             </div>
           </div>
         </div>

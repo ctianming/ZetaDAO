@@ -19,15 +19,12 @@ export function getWagmiConfig() {
   const projectId = web3.walletConnectProjectId
 
   // 服务端渲染阶段：使用轻量配置，避免远程请求
+  // 使用空的连接器数组以确保与 RainbowKit 兼容
   if (typeof window === 'undefined') {
     return createConfig({
       chains: [CHAIN],
       transports: { [CHAIN.id]: http(RPC_URL) },
-      connectors: [
-        // 优先 MetaMask，避免在多钱包注入时选择到非预期提供者
-        metaMask({ dappMetadata: { name: app.name } }),
-        injected({ target: 'metaMask' }),
-      ],
+      connectors: [],
     })
   }
 

@@ -1,8 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db';
 
+// Force dynamic rendering to avoid build-time fetch errors
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // GET /api/banners - Get active banners for the homepage
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const now = new Date().toISOString();
 
@@ -32,11 +36,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data });
   } catch (err: any) {
-    console.error('Error fetching active banners:', err);
-    return NextResponse.json(
-      { error: 'Failed to fetch banners', details: err.message },
-      { status: 500 }
-    );
+    console.error('Error fetching active banners:', {
+      message: err?.message || 'Unknown error',
+      details: err?.toString() || '',
+      hint: err?.hint || '',
+      code: err?.code || '',
+    });
+    // Return empty array instead of error to prevent page crashes
+    return NextResponse.json({ success: true, data: [] });
   }
 }
 
