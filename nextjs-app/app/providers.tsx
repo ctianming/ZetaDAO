@@ -24,28 +24,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }))
   
   const [mounted, setMounted] = useState(false)
-  const [config, setConfig] = useState<ReturnType<typeof getWagmiConfig> | null>(null)
+  // 立即初始化配置（包括服务器端），避免构建时错误
+  const [config] = useState(() => getWagmiConfig())
 
   useEffect(() => {
-    // 只在客户端初始化 Wagmi 配置
-    if (typeof window !== 'undefined') {
-      console.log('[Providers] 初始化 Wagmi 配置')
-      setConfig(getWagmiConfig())
-      setMounted(true)
-      console.log('[Providers] 组件已挂载')
-    }
+    setMounted(true)
+    console.log('[Providers] 组件已挂载')
   }, [])
-
-  // 在服务端渲染或配置未加载时返回简化版本
-  if (!mounted || !config) {
-    return (
-      <SessionProvider>
-        <ToastProvider>
-          {children}
-        </ToastProvider>
-      </SessionProvider>
-    )
-  }
 
   return (
     <WagmiProvider config={config}>

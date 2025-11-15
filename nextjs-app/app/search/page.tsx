@@ -2,6 +2,8 @@ import Header from '@/components/layout/Header'
 import SearchClient from './search-client'
 import { Suspense } from 'react'
 
+export const dynamic = 'force-dynamic'
+
 export default function SearchPage() {
   return (
     <div className="min-h-screen">
