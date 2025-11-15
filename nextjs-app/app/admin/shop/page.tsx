@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = 'force-dynamic'
+
 import Header from '@/components/layout/Header'
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWriteContract } from 'wagmi'
@@ -10,9 +12,6 @@ import { formatUnits, parseUnits } from 'viem'
 import { SHOP_ABI, SHOP_CONTRACT_ADDRESS } from '@/lib/shop'
 import { getZetaChainConfig } from '@/lib/web3'
 import { keccak256, stringToBytes, decodeEventLog } from 'viem'
-
-// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
-export const dynamic = 'force-dynamic'
 
 // 登录与钱包连接已解耦：此页仅依赖 Cookie 中的管理员校验与前端连接钱包用于链上操作
 

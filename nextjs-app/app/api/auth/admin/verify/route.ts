@@ -69,9 +69,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Expired or invalid nonce' }, { status: 400 })
     }
     
-    if (!message.includes(nonceCookie)) {
-      logAdminAuth(lower, false, 'Invalid nonce', clientIp)
-      return NextResponse.json({ success: false, error: 'Expired or invalid nonce' }, { status: 400 })
+    // Parse nonce data with timestamp validation
+    let nonceData: { nonce: string; timestamp: number; expiresAt: number }
+    try {
+      nonceData = JSON.parse(nonceCookie)
+      if (!nonceData.nonce || !nonceData.timestamp || !nonceData.expiresAt) {
+        throw new Error('Invalid nonce data structure')
+      }
+    } catch {
+      // Fallback: treat as legacy plain nonce string
+      nonceData = { nonce: nonceCookie, timestamp: Date.now() - 60000, expiresAt: Date.now() + 240000 }
+    }
+    
+    // Validate nonce expiration
+    if (Date.now() > nonceData.expiresAt) {
+      logAdminAuth(lower, false, 'Nonce expired', clientIp)
+      return NextResponse.json({ success: false, error: 'Nonce expired' }, { status: 400 })
+    }
+    
+    // Strict nonce validation: must match exactly and be in the expected format
+    const expectedMessage = `Admin access to ZetaDAO\n\nNonce: ${nonceData.nonce}\nTimestamp: ${nonceData.timestamp}\nExpires: ${new Date(nonceData.expiresAt).toISOString()}`
+    if (message !== expectedMessage) {
+      logAdminAuth(lower, false, 'Message format mismatch', clientIp)
+      return NextResponse.json({ success: false, error: 'Message format mismatch' }, { status: 400 })
     }
     
     // Verify signature

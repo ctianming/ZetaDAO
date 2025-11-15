@@ -206,7 +206,8 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
         if (!ch.ok || !jc?.success || !jc?.nonce) {
           setError(jc?.error || '挑战失败'); setIsAdmin(false); return
         }
-        const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}`
+        // Build message with timestamp for enhanced security
+        const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}\nTimestamp: ${jc.timestamp}\nExpires: ${new Date(jc.expiresAt).toISOString()}`
         let signature: string
         try {
           signature = await signMessageAsync({ message })

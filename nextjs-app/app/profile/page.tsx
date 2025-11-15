@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import Header from '@/components/layout/Header'
 import { useSession, signIn } from 'next-auth/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

@@ -1,12 +1,11 @@
 "use client"
+
+export const dynamic = 'force-dynamic'
 import Header from '@/components/layout/Header'
 import { useQuery } from '@tanstack/react-query'
 import { Twitter, Send } from 'lucide-react'
 import { getQueryConfig } from '@/lib/config'
 import Image from 'next/image'
-
-// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
-export const dynamic = 'force-dynamic'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 

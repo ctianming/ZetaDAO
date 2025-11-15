@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // 禁用静态优化以避免预渲染错误
+  // 这些页面需要客户端上下文（wagmi/react-query）
+  experimental: {
+    // 允许更灵活的渲染策略
+  },
   webpack: (config) => {
     // Silence optional deps that are Node-only or not needed in browser bundles
     config.resolve = config.resolve || {}

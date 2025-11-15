@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db';
 
 // GET /api/banners - Get active banners for the homepage
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const now = new Date().toISOString();
 

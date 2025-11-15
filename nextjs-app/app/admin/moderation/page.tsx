@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = 'force-dynamic'
+
 import { useAccount } from 'wagmi'
 import { useCallback, useEffect, useState } from 'react'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
@@ -11,9 +13,6 @@ import PromptDialog from '@/components/ui/PromptDialog'
 import { useToast } from '@/components/ui/Toast'
 import { marked } from 'marked'
 import sanitizeHtml from 'sanitize-html'
-
-// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
-export const dynamic = 'force-dynamic'
 
 export default function AdminModerationPage() {
   const { address, isConnected, status } = useAccount()

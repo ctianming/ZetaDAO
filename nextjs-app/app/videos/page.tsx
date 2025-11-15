@@ -1,4 +1,6 @@
 "use client"
+
+export const dynamic = 'force-dynamic'
 import Header from '@/components/layout/Header'
 import { useQuery } from '@tanstack/react-query'
 import Image from 'next/image'
