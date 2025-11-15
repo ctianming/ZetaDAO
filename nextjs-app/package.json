@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt next build",
-    "start": "NODE_EXTRA_CA_CERTS=/etc/pki/tls/certs/ca-bundle.crt next start",
+    "build": "next build",
+    "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
