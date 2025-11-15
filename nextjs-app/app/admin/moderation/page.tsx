@@ -12,6 +12,9 @@ import { useToast } from '@/components/ui/Toast'
 import { marked } from 'marked'
 import sanitizeHtml from 'sanitize-html'
 
+// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
+export const dynamic = 'force-dynamic'
+
 export default function AdminModerationPage() {
   const { address, isConnected, status } = useAccount()
   const { isAdmin, loading: authLoading, error: authError, refresh: refreshAdmin } = useEnsureAdminSession()

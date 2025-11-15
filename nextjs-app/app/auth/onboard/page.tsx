@@ -6,6 +6,9 @@ import { signIn } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
+// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
+export const dynamic = 'force-dynamic'
+
 export default function OnboardPage() {
   const { data: session } = useSession()
   const uid = (session as any)?.uid as string | undefined

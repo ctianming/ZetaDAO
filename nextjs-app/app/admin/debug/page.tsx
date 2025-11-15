@@ -3,6 +3,9 @@ import { useState } from 'react'
 import { WalletSelect } from '@/components/wallet/WalletSelect'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 
+// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
+export const dynamic = 'force-dynamic'
+
 export default function AdminDebugPage() {
   const [account, setAccount] = useState<string | null>(null)
   const { isAdmin, loading, error, refresh } = useEnsureAdminSession()

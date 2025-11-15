@@ -7,6 +7,9 @@ import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useEffect, useState, useRef } from 'react'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 
+// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
+export const dynamic = 'force-dynamic'
+
 export default function AdminPage() {
   const { isConnected, status } = useAccount()
   const { openConnectModal } = useConnectModal()

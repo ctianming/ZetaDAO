@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { auth } from '@/auth'
 
+// 强制动态渲染，避免构建时预渲染导致错误
+export const dynamic = 'force-dynamic'
+
 export default async function AuthErrorPage({ searchParams }: { searchParams: { error?: string } }) {
   const session = await auth()
   const error = searchParams?.error || 'OAuthSignin'

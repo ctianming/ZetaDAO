@@ -6,6 +6,9 @@ import Image from 'next/image'
 import { useAccount } from 'wagmi'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 
+// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
+export const dynamic = 'force-dynamic'
+
 type Video = {
   id: string
   title: string

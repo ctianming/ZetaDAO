@@ -1,11 +1,13 @@
 "use client"
 
-import { useAccount } from 'wagmi'
 import { useCallback, useEffect, useState } from 'react'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 import Header from '@/components/layout/Header'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/lib/utils'
+
+// 强制动态渲染，避免构建时预渲染导致 QueryClient 错误
+export const dynamic = 'force-dynamic'
 
 interface Banner {
   id: string;
@@ -18,7 +20,7 @@ interface Banner {
 }
 
 export default function AdminBannersPage() {
-  const { isAdmin, loading: authLoading, error: authError, refresh: refreshAdmin } = useEnsureAdminSession()
+  const { isAdmin, loading: authLoading } = useEnsureAdminSession()
   const { show } = useToast()
 
   const [banners, setBanners] = useState<Banner[]>([])

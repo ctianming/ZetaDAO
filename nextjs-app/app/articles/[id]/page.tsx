@@ -22,21 +22,21 @@ interface PageProps {
 
 async function getArticle(id: string): Promise<PublishedContent | null> {
   try {
-    const { data, error } = await supabase
-      .from('published_content')
-      .select('*')
-      .eq('id', id)
-      .single()
+  const { data, error } = await supabase
+    .from('published_content')
+    .select('*')
+    .eq('id', id)
+    .single()
 
-    if (error) {
-      console.error('Error fetching article:', error)
-      return null
-    }
+  if (error) {
+    console.error('Error fetching article:', error)
+    return null
+  }
 
-    // 浏览次数通过 API 记录并触发 XP 逻辑
-    // 注意：此处是服务端渲染，改为客户端触发以避免 SSR 时重复计数
+  // 浏览次数通过 API 记录并触发 XP 逻辑
+  // 注意：此处是服务端渲染，改为客户端触发以避免 SSR 时重复计数
 
-    return mapPublishedRow(data)
+  return mapPublishedRow(data)
   } catch (e) {
     console.error('Error in getArticle:', e)
     return null
