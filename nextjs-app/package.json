@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_EXTRA_CA_CERTS=/home/amyseer/anaconda3/ssl/cacert.pem next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
