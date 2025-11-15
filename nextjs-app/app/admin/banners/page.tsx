@@ -20,7 +20,7 @@ interface Banner {
 }
 
 export default function AdminBannersPage() {
-  const { isAdmin, loading: authLoading } = useEnsureAdminSession()
+  const { isAdmin, loading: authLoading, error: authError, refresh: refreshAdmin } = useEnsureAdminSession()
   const { show } = useToast()
 
   const [banners, setBanners] = useState<Banner[]>([])

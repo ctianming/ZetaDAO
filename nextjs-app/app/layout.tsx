@@ -3,6 +3,9 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 
+// 强制所有页面动态渲染，以避免在构建时因缺少客户端ent）而出错
+export const dynamic = 'force-dynamic'
+
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
