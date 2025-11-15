@@ -69,14 +69,25 @@ export default function AdminPage() {
             <div className="flex gap-3">
               <button
                 disabled={loading}
-                onClick={() => refresh()}
-                className="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm disabled:opacity-50"
+                onClick={(e) => {
+                  e.preventDefault()
+                  console.log('[AdminPage] 开始认证按钮被点击')
+                  refresh()
+                }}
+                className="px-4 py-2 rounded-lg bg-primary-600 text-white text-sm disabled:opacity-50 hover:bg-primary-700 transition-colors"
               >{loading ? '认证中...' : '开始认证'}</button>
               <button
-                onClick={() => openConnectModal?.()}
-                className="px-4 py-2 rounded-lg border text-sm"
+                onClick={(e) => {
+                  e.preventDefault()
+                  console.log('[AdminPage] 重新连接按钮被点击')
+                  openConnectModal?.()
+                }}
+                className="px-4 py-2 rounded-lg border text-sm hover:bg-gray-50 transition-colors"
               >重新连接</button>
-              <button onClick={() => router.push('/')} className="px-4 py-2 rounded-lg border text-sm">返回首页</button>
+              <button 
+                onClick={() => router.push('/')} 
+                className="px-4 py-2 rounded-lg border text-sm hover:bg-gray-50 transition-colors"
+              >返回首页</button>
             </div>
             <div className="mt-6 text-xs text-gray-500">若持续失败：尝试清除站点 Cookie、切换或重装钱包扩展、或使用 WalletConnect 在移动端授权。</div>
           </div>

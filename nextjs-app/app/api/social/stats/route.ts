@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 import { supabaseAdmin } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions as any)
+    const session = await auth()
     const s = session as any
     const { searchParams } = new URL(req.url)
     const uid = String(searchParams.get('uid') || s?.uid || '')

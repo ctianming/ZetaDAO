@@ -4,20 +4,32 @@ import { mapPublishedRows } from '@/lib/transform'
 import Link from 'next/link'
 import FollowButton from '@/components/social/FollowButton'
 import AvatarEditor from '@/components/profile/AvatarEditor'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 
+// Use dynamic rendering to avoid build-time fetch issues
+export const dynamic = 'force-dynamic'
+
 async function getUser(uid: string) {
-  const { data, error } = await supabase.from('users').select('uid,username,avatar_url,bio,xp_total,created_at').eq('uid', uid).single()
-  if (error) return null
-  return data
+  try {
+    const { data, error } = await supabase.from('users').select('uid,username,avatar_url,bio,xp_total,created_at').eq('uid', uid).single()
+    if (error) return null
+    return data
+  } catch (e) {
+    console.error('Error in getUser:', e)
+    return null
+  }
 }
 
 async function getArticles(uid: string) {
-  const { data, error } = await supabase.from('published_content').select('*').eq('author_uid', uid).eq('category','article').order('published_at', { ascending: false }).limit(6)
-  if (error) return []
-  return mapPublishedRows(data)
+  try {
+    const { data, error } = await supabase.from('published_content').select('*').eq('author_uid', uid).eq('category','article').order('published_at', { ascending: false }).limit(6)
+    if (error) return []
+    return mapPublishedRows(data || [])
+  } catch (e) {
+    console.error('Error in getArticles:', e)
+    return []
+  }
 }
 
 export default async function PublicUserPage({ params }: { params: { uid: string } }) {
@@ -34,7 +46,7 @@ export default async function PublicUserPage({ params }: { params: { uid: string
   }
   const articles = await getArticles(params.uid)
   // Determine if this is self page
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const isSelf = Boolean((session as any)?.uid && (session as any).uid === user.uid)
   if (isSelf) {
     // 自己访问 /u/<uid> 时跳转到 /profile

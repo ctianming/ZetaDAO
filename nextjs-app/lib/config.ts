@@ -1,12 +1,24 @@
-export const AUTO_REFRESH_ENABLED: boolean = (process.env.NEXT_PUBLIC_AUTO_REFRESH_ENABLED ?? 'true') !== 'false'
-export const SWR_REFRESH_MS: number = Number(process.env.NEXT_PUBLIC_SWR_REFRESH_MS || '15000')
-export const SWR_REVALIDATE_ON_FOCUS: boolean = (process.env.NEXT_PUBLIC_SWR_REVALIDATE_ON_FOCUS ?? 'true') !== 'false'
-export const SWR_REVALIDATE_ON_RECONNECT: boolean = (process.env.NEXT_PUBLIC_SWR_REVALIDATE_ON_RECONNECT ?? 'true') !== 'false'
+import { refresh } from './env'
 
+/**
+ * 获取 TanStack Query 的配置
+ * 统一管理数据请求的刷新和重新验证行为
+ */
+export function getQueryConfig() {
+  return {
+    refetchInterval: refresh.enabled ? refresh.intervalMs : false,
+    refetchOnWindowFocus: refresh.onFocus && refresh.enabled,
+    refetchOnReconnect: refresh.onReconnect && refresh.enabled,
+    staleTime: 5000, // 数据在 5 秒内被视为新鲜
+  } as const
+}
+
+// 保留旧的 SWR 配置函数以兼容可能存在的其他代码
+/** @deprecated 请使用 getQueryConfig() 替代 */
 export function getSWRConfig() {
   return {
-    refreshInterval: AUTO_REFRESH_ENABLED ? SWR_REFRESH_MS : 0,
-    revalidateOnFocus: SWR_REVALIDATE_ON_FOCUS && AUTO_REFRESH_ENABLED,
-    revalidateOnReconnect: SWR_REVALIDATE_ON_RECONNECT && AUTO_REFRESH_ENABLED,
+    refreshInterval: refresh.enabled ? refresh.intervalMs : 0,
+    revalidateOnFocus: refresh.onFocus && refresh.enabled,
+    revalidateOnReconnect: refresh.onReconnect && refresh.enabled,
   } as const
 }

@@ -48,8 +48,21 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
 
   const ensureProviderAuthorized = useCallback(async () => {
     if (typeof window === 'undefined') return
-    const eth: any = (window as any).ethereum
-    if (!eth?.request) return
+    
+    // Enhanced provider detection: support multiple wallet scenarios
+    let eth: any = (window as any).ethereum
+    
+    // If multiple wallets are installed, try to find the preferred one
+    if (eth?.providers && Array.isArray(eth.providers)) {
+      // Prefer MetaMask if available
+      const metamask = eth.providers.find((p: any) => p.isMetaMask)
+      if (metamask) eth = metamask
+      else eth = eth.providers[0] // Fallback to first provider
+    }
+    
+    if (!eth?.request) {
+      throw new Error('未检测到钱包扩展，请安装 MetaMask 或其他兼容钱包')
+    }
     // 1) Accounts
     let accs: string[] = []
     try {
@@ -82,11 +95,43 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   }, [])
 
   const run = useCallback(async () => {
-    console.log('[useEnsureAdminSession] run invoked', { address, isConnected, status, running: runningRef.current })
-    if (runningRef.current) return
+    console.log('🔵 [useEnsureAdminSession] Button clicked - run() invoked', { 
+      address, 
+      isConnected, 
+      status, 
+      running: runningRef.current,
+      timestamp: new Date().toISOString()
+    })
+
+    // Pre-flight check 1: Secure context (HTTPS requirement for Web3)
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      console.error('❌ [useEnsureAdminSession] INSECURE CONTEXT - Web3 operations require HTTPS')
+      safeSet(setError, '⚠️ 不安全的连接 (HTTP)。请使用 HTTPS 访问本站以启用钱包功能。')
+      return
+    }
+
+    // Pre-flight check 2: Ensure hooks are properly initialized
+    if (!openConnectModal) {
+      console.error('❌ [useEnsureAdminSession] openConnectModal is undefined - RainbowKit not initialized')
+      safeSet(setError, '⚠️ 钱包连接功能未正确初始化，请刷新页面重试。')
+      return
+    }
+
+    if (!signMessageAsync) {
+      console.error('❌ [useEnsureAdminSession] signMessageAsync is undefined - Wagmi not initialized')
+      safeSet(setError, '⚠️ 钱包签名功能未正确初始化，请刷新页面重试。')
+      return
+    }
+
+    if (runningRef.current) {
+      console.log('⏸️ [useEnsureAdminSession] 已有认证流程在运行中，跳过')
+      return
+    }
+
     runningRef.current = true
     safeSet(setLoading, true)
     safeSet(setError, null)
+    console.log('✅ [useEnsureAdminSession] 开始认证流程...')
     // First: check whether server already has an admin session (httpOnly cookie)
     try {
       console.log('[useEnsureAdminSession] fetching /api/auth/is-admin')
@@ -161,7 +206,8 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
         if (!ch.ok || !jc?.success || !jc?.nonce) {
           setError(jc?.error || '挑战失败'); setIsAdmin(false); return
         }
-        const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}`
+        // Build message with timestamp for enhanced security
+        const message = `Admin access to ZetaDAO\n\nNonce: ${jc.nonce}\nTimestamp: ${jc.timestamp}\nExpires: ${new Date(jc.expiresAt).toISOString()}`
         let signature: string
         try {
           signature = await signMessageAsync({ message })
@@ -208,7 +254,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
       runningRef.current = false
       attemptsRef.current += 1
     }
-  }, [address, isConnected, status, signMessageAsync, show, openConnectModal, disconnect])
+  }, [address, isConnected, status, signMessageAsync, show, openConnectModal, disconnect, ensureProviderAuthorized, safeSet])
 
   // Expose a global debug hook so operators can manually trigger the flow from the browser console:
   //   window.__zd_admin_refresh && window.__zd_admin_refresh()
@@ -233,7 +279,11 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
   }, [])
 
   // 在地址变化或挂载时只检查服务器端 session，不自动触发签名流程
-  useEffect(() => { checkSession() }, [address, checkSession])
+  useEffect(() => { 
+    if (mountedRef.current) {
+      checkSession() 
+    }
+  }, [address, checkSession])
 
   // track mounted state to avoid setState during other component's render
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false } }, [])

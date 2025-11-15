@@ -6,6 +6,8 @@ import { mapPublishedRows } from '@/lib/transform'
 import { Calendar, MapPin, Users } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
+// Use dynamic rendering to avoid build-time fetch issues
+export const dynamic = 'force-dynamic'
 export const revalidate = 60
 
 async function getActivities(): Promise<PublishedContent[]> {
@@ -17,12 +19,22 @@ async function getActivities(): Promise<PublishedContent[]> {
       .order('published_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching activities:', error)
+      console.error('Error fetching activities:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      })
       return []
     }
-    return mapPublishedRows(data)
-  } catch (e) {
-    console.error('Error fetching activities:', e)
+    return mapPublishedRows(data || [])
+  } catch (e: any) {
+    console.error('Error fetching activities:', {
+      message: e?.message || 'Unknown error',
+      details: e?.stack || '',
+      hint: '',
+      code: '',
+    })
     return []
   }
 }

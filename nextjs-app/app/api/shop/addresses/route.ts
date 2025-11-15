@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 import { supabaseAdmin } from '@/lib/db'
 
 export async function GET(_req: NextRequest) {
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const { data, error } = await supabaseAdmin.from('shop_addresses').select('*').eq('user_uid', uid).order('created_at', { ascending: false })
@@ -13,7 +12,7 @@ export async function GET(_req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
@@ -41,7 +40,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
@@ -62,7 +61,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   const url = new URL(req.url)

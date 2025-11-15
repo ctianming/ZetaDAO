@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 
 export async function POST(_req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions as any)
+    const session = await auth()
     const uid = (session as any)?.uid as string | undefined
     if (!uid) return NextResponse.json({ error: '未登录' }, { status: 401 })
 

@@ -1,9 +1,8 @@
 import Link from 'next/link'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 
 export default async function AuthErrorPage({ searchParams }: { searchParams: { error?: string } }) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   const error = searchParams?.error || 'OAuthSignin'
   const isNetwork = /timeout|ECONN|ENOTFOUND|TLS|socket/i.test(error)
 

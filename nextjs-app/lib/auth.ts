@@ -1,10 +1,8 @@
 // Session-only admin auth utilities (legacy header/query method removed).
 // Configure a comma-separated list of admin wallet addresses in ADMIN_WALLETS.
-export const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || '')
-  .split(',')
-  .map(a => a.trim().toLowerCase())
-  .filter(Boolean)
+import { admin as adminConfig } from './env'
 
+export const ADMIN_WALLETS = adminConfig.wallets
 const ADMIN_WALLETS_SET = new Set(ADMIN_WALLETS)
 
 export function isAdmin(address: string | undefined): boolean {
@@ -17,8 +15,22 @@ export function requireAdmin(address: string | undefined): void {
 
 // ---- Admin session (signed cookie) ----
 import crypto from 'crypto'
-const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || process.env.SIGNING_KEY || 'dev-admin-secret'
+const ADMIN_SESSION_SECRET = adminConfig.sessionSecret
 const ADMIN_SESSION_COOKIE = 'admin_session'
+
+// In-memory revocation list (for production, use Redis or database)
+// Maps JTI (token ID) to revocation timestamp
+const revokedTokens = new Map<string, number>()
+
+// Clean up old revoked tokens periodically (older than 2 hours)
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000
+    for (const [jti, timestamp] of revokedTokens.entries()) {
+      if (timestamp < cutoff) revokedTokens.delete(jti)
+    }
+  }, 10 * 60 * 1000) // Run every 10 minutes
+}
 
 function b64url(input: string | Buffer) {
   return Buffer.from(input).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
@@ -46,9 +58,32 @@ export function verifyAdminSessionToken(token: string | undefined) {
   try { crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)) } catch { return null }
   let payload: any
   try { payload = JSON.parse(b64urlDecode(body)) } catch { return null }
-  if (!payload?.w || !payload?.exp) return null
+  if (!payload?.w || !payload?.exp || !payload?.jti) return null
   if (payload.exp < Math.floor(Date.now() / 1000)) return null
+  
+  // Check if token has been revoked
+  if (revokedTokens.has(payload.jti)) return null
+  
   return String(payload.w)
+}
+
+/**
+ * Revoke a session token by its JTI (token ID)
+ * This allows immediate invalidation without waiting for expiration
+ */
+export function revokeAdminSessionToken(jti: string) {
+  revokedTokens.set(jti, Date.now())
+}
+
+/**
+ * Revoke all sessions for a specific wallet address
+ * Note: This only works for tokens issued after this mechanism was added
+ */
+export function revokeAllSessionsForWallet(address: string) {
+  // In a production system, you'd query all active sessions from database
+  // For now, this is a placeholder that would need database integration
+  console.log(`[Auth] Revoke all sessions requested for wallet: ${address}`)
+  // TODO: Implement database-backed session tracking
 }
 
 export function getAdminWalletFromSession(req: Request | { headers: Headers; cookies?: any }) {

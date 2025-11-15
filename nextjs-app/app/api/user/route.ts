@@ -2,12 +2,11 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 
 // GET /api/user?uid=...  (uid optional; if absent uses session uid)
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const { searchParams } = new URL(request.url)
   const uidParam = searchParams.get('uid')
   const walletParam = searchParams.get('wallet')
@@ -41,7 +40,7 @@ export async function GET(request: NextRequest) {
 // PUT body: { uid?, username?, avatar_url?, bio? }
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions as any)
+    const session = await auth()
     const s = session as any
     if (!s?.uid) return NextResponse.json({ error: '未登录' }, { status: 401 })
     const body = await request.json()

@@ -2,13 +2,21 @@ import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { supabase } from '@/lib/db'
 
+// Use dynamic rendering to avoid build-time fetch issues
+export const dynamic = 'force-dynamic'
+
 async function getFollowers(uid: string) {
-  const { data, error } = await supabase.from('user_follows').select('follower_uid').eq('following_uid', uid)
-  if (error) return []
-  const ids = data.map((r:any)=>r.follower_uid)
-  if (ids.length === 0) return []
-  const { data: users } = await supabase.from('users').select('uid,username,xp_total').in('uid', ids)
-  return users || []
+  try {
+    const { data, error } = await supabase.from('user_follows').select('follower_uid').eq('following_uid', uid)
+    if (error) return []
+    const ids = data.map((r:any)=>r.follower_uid)
+    if (ids.length === 0) return []
+    const { data: users } = await supabase.from('users').select('uid,username,xp_total').in('uid', ids)
+    return users || []
+  } catch (e) {
+    console.error('Error in getFollowers:', e)
+    return []
+  }
 }
 
 export default async function FollowersPage({ params }: { params: { uid: string } }) {

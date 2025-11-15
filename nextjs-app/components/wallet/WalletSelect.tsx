@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { walletLinks } from '@/lib/wallet/walletLinks'
 import { connectWithWallet } from '@/lib/wallet/walletService'
-import { useConnectModal } from '@rainbow-me/rainbowkit'
 
 interface Props {
   onConnected: (account: string) => void
@@ -11,25 +10,13 @@ interface Props {
 export function WalletSelect({ onConnected }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const { openConnectModal } = useConnectModal()
-
-  const isMobile = () => {
-    if (typeof window === 'undefined') return false
-    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-  }
 
   const handleClick = async (walletId: string) => {
     setError(null)
     setLoading(walletId)
     try {
-      if (isMobile()) {
-        const { account } = await connectWithWallet(walletId)
-        onConnected(account)
-      } else {
-        // Desktop: open RainbowKit connect modal (MetaMask extension)
-        if (openConnectModal) openConnectModal()
-        setError('桌面请通过右上角“连接钱包”按钮使用 MetaMask 扩展连接。')
-      }
+      const { account } = await connectWithWallet(walletId)
+      onConnected(account)
     } catch (e: any) {
       console.error('Connect failed', e)
       setError(e?.message || '连接失败，请重试')

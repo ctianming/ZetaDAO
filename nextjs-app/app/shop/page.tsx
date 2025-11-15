@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { SHOP_ABI, SHOP_CONTRACT_ADDRESS } from '@/lib/shop'
 import { getZetaChainConfig } from '@/lib/web3'
 import { Hex, formatUnits, decodeEventLog } from 'viem'
-import { AUTO_REFRESH_ENABLED, SWR_REFRESH_MS } from '@/lib/config'
+import { refresh } from '@/lib/env'
 
 export default function ShopPage() {
   const [products, setProducts] = useState<ShopProduct[]>([])
@@ -35,8 +35,8 @@ export default function ShopPage() {
     }
     load()
     // 自动刷新（可通过环境变量控制）
-    if (AUTO_REFRESH_ENABLED && SWR_REFRESH_MS > 0) {
-      timer = setInterval(load, SWR_REFRESH_MS)
+    if (refresh.enabled && refresh.intervalMs > 0) {
+      timer = setInterval(load, refresh.intervalMs)
     }
     return () => timer && clearInterval(timer)
   }, [])

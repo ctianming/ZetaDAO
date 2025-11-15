@@ -1,9 +1,10 @@
-import GoogleProvider from 'next-auth/providers/google'
-import GithubProvider from 'next-auth/providers/github'
-import CredentialsProvider from 'next-auth/providers/credentials'
-import type { NextAuthOptions } from 'next-auth'
-// Removed unused imports (cookies, verifyMessage, Address, Hex) to satisfy eslint
+import NextAuth from 'next-auth'
+import Google from 'next-auth/providers/google'
+import GitHub from 'next-auth/providers/github'
+import Credentials from 'next-auth/providers/credentials'
+import type { NextAuthConfig } from 'next-auth'
 import { supabaseAdmin } from '@/lib/db'
+import { auth as authConfig } from '@/lib/env'
 import bcrypt from 'bcryptjs'
 
 // Helper: find or create user & identity
@@ -37,29 +38,24 @@ async function findOrCreateUserIdentity(provider: string, accountId: string, pro
   return newUser.uid
 }
 
-// (Removed unused helper getUserUidByWallet)
-
-export const authOptions: NextAuthOptions = {
+export const nextAuthConfig: NextAuthConfig = {
   session: { strategy: 'jwt' },
   pages: {
-  error: '/auth/error',
-  signIn: '/auth/error',
+    error: '/auth/error',
+    signIn: '/auth/error',
   },
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      allowDangerousEmailAccountLinking: true,
-      httpOptions: {
-        timeout: parseInt(process.env.NEXTAUTH_GOOGLE_TIMEOUT_MS || '', 10) || 15000,
-      },
-    }),
-    GithubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID || '',
-      clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
+    Google({
+      clientId: authConfig.googleClientId,
+      clientSecret: authConfig.googleClientSecret,
       allowDangerousEmailAccountLinking: true,
     }),
-    CredentialsProvider({
+    GitHub({
+      clientId: authConfig.githubClientId,
+      clientSecret: authConfig.githubClientSecret,
+      allowDangerousEmailAccountLinking: true,
+    }),
+    Credentials({
       id: 'password',
       name: 'password',
       credentials: {
@@ -67,8 +63,8 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const identifier = credentials?.identifier?.toLowerCase().trim()
-        const password = credentials?.password || ''
+        const identifier = credentials?.identifier?.toString().toLowerCase().trim()
+        const password = credentials?.password?.toString() || ''
         if (!identifier || !password) return null
         // Find by email only in local auth table (usernames may be non-unique)
         const { data: user } = await supabaseAdmin
@@ -82,7 +78,7 @@ export const authOptions: NextAuthOptions = {
         const ok = await bcrypt.compare(password, user.password_hash)
         if (!ok) return null
         // Map to primary user uid via identity (email provider)
-  let uid: string | null = null
+        let uid: string | null = null
         const { data: ident } = await supabaseAdmin
           .from('user_identities')
           .select('user_uid')
@@ -93,8 +89,8 @@ export const authOptions: NextAuthOptions = {
         if (!uid) {
           uid = await findOrCreateUserIdentity('email', user.email, { avatar_url: null })
         }
-  if (!uid) return null
-  return { id: uid as string, name: user.username || user.email, email: user.email }
+        if (!uid) return null
+        return { id: uid as string, name: user.username || user.email, email: user.email }
       },
     }),
   ],
@@ -103,7 +99,7 @@ export const authOptions: NextAuthOptions = {
       // If provider OAuth (google/github), handle identity
       if (account && (account.provider === 'google' || account.provider === 'github')) {
         const provider = account.provider
-  const accountId = (profile as any)?.sub || (profile as any)?.id || ''
+        const accountId = (profile as any)?.sub || (profile as any)?.id || ''
         if (accountId) {
           // get or create identity
           let userUid: string | null = null
@@ -125,7 +121,7 @@ export const authOptions: NextAuthOptions = {
       // Credentials user object has id = uid now
       if (user?.id && !token.uid) token.uid = user.id as string
       if ((user as any)?.walletAddress) token.walletAddress = (user as any).walletAddress
-  if ((user as any)?.newWalletUser) (token as any).newWalletUser = true
+      if ((user as any)?.newWalletUser) (token as any).newWalletUser = true
       if (!token.email && (user as any)?.email) token.email = (user as any).email
       if (!token.email && (profile as any)?.email) token.email = (profile as any).email
       return token
@@ -153,5 +149,8 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
-  secret: process.env.NEXTAUTH_SECRET || 'dev-secret',
+  secret: authConfig.secret,
 }
+
+export const { handlers, auth, signIn, signOut } = NextAuth(nextAuthConfig)
+

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 import { supabaseAdmin } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 
 // POST body: { currentPassword, newPassword }
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions as any)
+    const session = await auth()
     const s = session as any
     if (!s?.uid) return NextResponse.json({ error: '未登录' }, { status: 401 })
     const body = await req.json()

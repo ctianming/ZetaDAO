@@ -1,15 +1,19 @@
 "use client"
 import Header from '@/components/layout/Header'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import { Twitter, Send } from 'lucide-react'
-import { getSWRConfig } from '@/lib/config'
+import { getQueryConfig } from '@/lib/config'
 import Image from 'next/image'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export default function AmbassadorsPage() {
-  const swrCfg = getSWRConfig()
-  const { data, error, isValidating } = useSWR('/api/content/ambassadors', fetcher, swrCfg)
+  const queryConfig = getQueryConfig()
+  const { data, error, isFetching } = useQuery({
+    queryKey: ['ambassadors'],
+    queryFn: () => fetcher('/api/content/ambassadors'),
+    ...queryConfig
+  })
   const ambassadors = (data?.data || []) as any[]
 
   return (
@@ -23,7 +27,7 @@ export default function AmbassadorsPage() {
           </p>
 
           <div className="mb-6 text-xs text-gray-500 flex items-center gap-3">
-            {isValidating ? <span className="animate-pulse">同步最新数据中...</span> : <span>已加载 {ambassadors.length} 位</span>}
+            {isFetching ? <span className="animate-pulse">同步最新数据中...</span> : <span>已加载 {ambassadors.length} 位</span>}
             {error && <span className="text-red-500">加载出错</span>}
           </div>
 

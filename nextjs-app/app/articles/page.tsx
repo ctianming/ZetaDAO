@@ -3,6 +3,8 @@ import { supabase } from '@/lib/db'
 import ArticlesFilter from '@/components/content/ArticlesFilter'
 import ArticlesListClient from '@/app/articles/ArticlesListClient'
 
+// Use dynamic rendering to avoid build-time fetch issues
+export const dynamic = 'force-dynamic'
 export const revalidate = 60 // ISR兜底：每60秒再生一次
 
 export default async function ArticlesPage({ searchParams }: { searchParams?: { articleCategory?: string; tag?: string; q?: string } }) {

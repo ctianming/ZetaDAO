@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/db'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 import { SubmitContentForm } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -12,7 +11,7 @@ export async function POST(request: NextRequest) {
     // 解析 user_uid：优先 session，其次 identities(wallet)
     let userUid: string | null = null
     try {
-      const session = await getServerSession(authOptions as any)
+      const session = await auth()
       userUid = (session as any)?.uid || null
     } catch {}
     if (!userUid && walletAddress) {

@@ -24,11 +24,6 @@ export async function connectWithWallet(walletId: string): Promise<ConnectResult
   const info = walletLinks.find(w => w.id === walletId)
   if (!info) throw new Error(`Unsupported wallet: ${walletId}`)
 
-  // Desktop is not supported here (we don't show a QR UI yet). Use RainbowKit connect modal or MetaMask extension instead.
-  if (!isMobile()) {
-    throw new Error('桌面环境请使用右上角连接钱包按钮（MetaMask 扩展），此处的 WalletConnect 仅用于移动端深链。')
-  }
-
   const client = await getSignClient()
   const { CHAIN } = getZetaChainConfig()
   const { uri, approval } = await client.connect({
@@ -37,13 +32,14 @@ export async function connectWithWallet(walletId: string): Promise<ConnectResult
   if (!uri) throw new Error('No pairing URI returned')
 
   const encoded = encodeURIComponent(uri)
-  // Mobile deep-link: try native scheme first, then universal link as fallback
-  window.location.href = `${info.mobileDeepLink}${encoded}`
-  setTimeout(() => {
-    if (document.visibilityState === 'visible') {
-      window.open(`${info.mobileUniversalLink}${encoded}`, '_blank', 'noopener,noreferrer')
-    }
-  }, FALLBACK_TIMEOUT)
+  if (isMobile()) {
+    window.location.href = `${info.mobileDeepLink}${encoded}`
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        window.open(`${info.mobileUniversalLink}${encoded}`, '_blank', 'noopener,noreferrer')
+      }
+    }, FALLBACK_TIMEOUT)
+  }
   const session = await approval()
   const accounts: string[] = session?.namespaces?.eip155?.accounts || []
   if (!accounts.length) throw new Error('No accounts in WalletConnect session')

@@ -5,7 +5,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { AUTO_REFRESH_ENABLED, SWR_REFRESH_MS, SWR_REVALIDATE_ON_FOCUS, SWR_REVALIDATE_ON_RECONNECT } from '@/lib/config'
+import { refresh } from '@/lib/env'
 
 export default function DynamicsPage() {
   const { data: session } = useSession()
@@ -153,16 +153,16 @@ function FeedList() {
   // 全局自动刷新（基于配置，可选开启）+ 聚焦/网络重连再验证
   useEffect(() => {
     let timer: any
-    if (AUTO_REFRESH_ENABLED && SWR_REFRESH_MS > 0) {
-      timer = setInterval(() => load(true), SWR_REFRESH_MS)
+    if (refresh.enabled && refresh.intervalMs > 0) {
+      timer = setInterval(() => load(true), refresh.intervalMs)
     }
     const onVisibility = () => {
-      if (SWR_REVALIDATE_ON_FOCUS && document.visibilityState === 'visible' && AUTO_REFRESH_ENABLED) {
+      if (refresh.onFocus && document.visibilityState === 'visible' && refresh.enabled) {
         load(true)
       }
     }
     const onOnline = () => {
-      if (SWR_REVALIDATE_ON_RECONNECT && AUTO_REFRESH_ENABLED) {
+      if (refresh.onReconnect && refresh.enabled) {
         load(true)
       }
     }

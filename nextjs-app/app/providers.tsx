@@ -1,81 +1,54 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider, createConfig, http } from 'wagmi'
-import { injected, metaMask } from 'wagmi/connectors'
-import { RainbowKitProvider, connectorsForWallets } from '@rainbow-me/rainbowkit'
-import { metaMaskWallet, walletConnectWallet } from '@rainbow-me/rainbowkit/wallets'
+import { WagmiProvider } from 'wagmi'
+import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { ToastProvider } from '@/components/ui/Toast'
-import { getZetaChainConfig } from '@/lib/web3'
+import { getWagmiConfig } from '@/lib/wagmi-config'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient())
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        // 防止在生产环境中过度重试
+        retry: 2,
+        retryDelay: 1000,
+      },
+    },
+  }))
+  
+  const [mounted, setMounted] = useState(false)
+  
+  // 确保配置在客户端正确初始化
   const config = useMemo(() => {
-    const { CHAIN, RPC_URL } = getZetaChainConfig()
-    const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-    // 在浏览器端尽可能选择 MetaMask 作为首选 provider，避免聚合层/其他钱包接管
-    if (typeof window !== 'undefined') {
-      try {
-        const w = window as any
-        const eth = w.ethereum
-        if (eth?.providers?.length) {
-          const metaMaskProvider = eth.providers.find((p: any) => p && p.isMetaMask)
-          if (metaMaskProvider) {
-            w.ethereum = metaMaskProvider
-          }
-        }
-      } catch {}
-    }
-    // 在服务端渲染阶段避免远程请求 web3modal 配置，采用本地轻量配置
-    if (typeof window === 'undefined') {
-      return createConfig({
-        chains: [CHAIN],
-        transports: { [CHAIN.id]: http(RPC_URL) },
-        connectors: [
-          // 优先 MetaMask，避免在多钱包注入时选择到非预期提供者
-          metaMask({ dappMetadata: { name: 'ZetaDAO Community Portal' } }),
-          injected({ target: 'metaMask' }),
-        ],
-      })
-    }
-    // 浏览器环境：仅启用 MetaMask + WalletConnect，显式排除 Coinbase，以避免其 SDK 及分析上报（cca-lite）带来的报错与干扰
-    if (projectId && projectId !== 'demo-project-id') {
-      const rkConnectors = connectorsForWallets(
-        [
-          {
-            groupName: '推荐',
-            wallets: [
-              // 仅保留 MetaMask 与 WalletConnect，避免某些注入钱包拦截导致的未授权报错
-              metaMaskWallet,
-              walletConnectWallet,
-            ],
-          },
-        ],
-        {
-          appName: 'ZetaDAO Community Portal',
-          projectId,
-        }
-      )
-      return createConfig({
-        chains: [CHAIN],
-        transports: { [CHAIN.id]: http(RPC_URL) },
-        connectors: rkConnectors,
-      })
-    }
-    // 否则回退到注入钱包（仅注入 + MetaMask）
-    console.warn('[WalletConnect] 缺少 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID，将回退到浏览器注入钱包（不包含 Coinbase）。')
-    return createConfig({
-      chains: [CHAIN],
-      transports: { [CHAIN.id]: http(RPC_URL) },
-      connectors: [
-  metaMask({ dappMetadata: { name: 'ZetaDAO Community Portal' } }),
-        injected({ target: 'metaMask' }),
-      ],
-    })
+    console.log('[Providers] 初始化 Wagmi 配置')
+    return getWagmiConfig()
   }, [])
+
+  useEffect(() => {
+    setMounted(true)
+    console.log('[Providers] 组件已挂载')
+  }, [])
+
+  // 在服务端渲染时返回简化版本
+  if (!mounted) {
+    return (
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider>
+            <RainbowKitProvider>
+              <ToastProvider>
+                {children}
+              </ToastProvider>
+            </RainbowKitProvider>
+          </SessionProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+    )
+  }
 
   return (
     <WagmiProvider config={config}>

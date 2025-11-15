@@ -1,10 +1,10 @@
 "use client"
 import Header from '@/components/layout/Header'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useState, useCallback } from 'react'
-import { getSWRConfig } from '@/lib/config'
+import { getQueryConfig } from '@/lib/config'
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -37,14 +37,18 @@ function VideosList() {
     if (querySnapshot.tag) params.set('tag', querySnapshot.tag)
     return `/api/content/videos?${params.toString()}`
   }, [querySnapshot])
-  const swrCfg = getSWRConfig()
-  const { data, error, isValidating } = useSWR(buildUrl(), fetcher, swrCfg)
+  const queryConfig = getQueryConfig()
+  const { data, error, isFetching } = useQuery({
+    queryKey: ['videos', querySnapshot.q, querySnapshot.tag],
+    queryFn: () => fetcher(buildUrl()),
+    ...queryConfig
+  })
   const videos = (data?.data || []) as any[]
 
   return (
     <>
       <div className="mb-6 text-xs text-gray-500 flex items-center gap-3">
-        {isValidating ? <span className="animate-pulse">同步最新数据中...</span> : <span>已加载 {videos.length} 条</span>}
+        {isFetching ? <span className="animate-pulse">同步最新数据中...</span> : <span>已加载 {videos.length} 条</span>}
         {error && <span className="text-red-500">加载出错</span>}
       </div>
 

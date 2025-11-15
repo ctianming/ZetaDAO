@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase, supabaseAdmin } from '@/lib/db'
 import { isAdminFromSession, getAdminWalletFromSession } from '@/lib/auth'
 import { mapSubmissionRows } from '@/lib/transform'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 
 // 获取投稿列表（Admin专用）
 export async function GET(request: NextRequest) {
@@ -33,7 +32,7 @@ export async function GET(request: NextRequest) {
     // 普通用户：优先使用 session uid 过滤；若未登录但已连接钱包，则用 legacy wallet_address 过滤；否则 401
     let userUid: string | null = null
     try {
-      const session = await getServerSession(authOptions as any)
+      const session = await auth()
       userUid = (session as any)?.uid || null
     } catch {}
 

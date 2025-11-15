@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/nextauth'
+import { auth } from '@/auth'
 import { supabaseAdmin } from '@/lib/db'
 import { isAdminFromSession } from '@/lib/auth'
 import { SHOP_ABI, SHOP_ORDER_STATUS_CODE } from '@/lib/shop'
@@ -17,7 +16,7 @@ const STATUS_META = {
 type TargetStatus = keyof typeof STATUS_META
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as any)
+  const session = await auth()
   const uid = (session as any)?.uid as string | undefined
   if (!uid) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 

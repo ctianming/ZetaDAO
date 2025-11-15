@@ -1,8 +1,8 @@
 "use client"
 import { useMemo } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import ArticleCard from '@/components/content/ArticleCard'
-import { getSWRConfig } from '@/lib/config'
+import { getQueryConfig } from '@/lib/config'
 
 export default function ArticlesListClient({ initialParams }: { initialParams: { articleCategory: string; tag: string; q: string } }) {
   const params = useMemo(() => {
@@ -13,11 +13,15 @@ export default function ArticlesListClient({ initialParams }: { initialParams: {
     return usp
   }, [initialParams])
   const url = `/api/content/articles?${params.toString()}`
-  const swrCfg = getSWRConfig()
-  const { data, error, isValidating } = useSWR(url, (u)=>fetch(u).then(r=>r.json()), swrCfg)
+  const queryConfig = getQueryConfig()
+  const { data, error, isLoading } = useQuery({
+    queryKey: ['articles', params.toString()],
+    queryFn: () => fetch(url).then(r => r.json()),
+    ...queryConfig
+  })
   const articles = (data?.data || []) as any[]
 
-  if (!data && isValidating) {
+  if (isLoading) {
     return <div className="text-center py-20"><p className="text-muted-foreground text-lg">加载中...</p></div>
   }
   
