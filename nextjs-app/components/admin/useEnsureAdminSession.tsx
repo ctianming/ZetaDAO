@@ -276,7 +276,7 @@ export function useEnsureAdminSession(): UseEnsureAdminSessionResult {
     } catch (e) {
       safeSet(setIsAdmin, false)
     }
-  }, [])
+  }, [safeSet])
 
   // 在地址变化或挂载时只检查服务器端 session，不自动触发签名流程
   useEffect(() => { 

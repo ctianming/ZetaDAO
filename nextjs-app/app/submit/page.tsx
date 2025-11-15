@@ -8,6 +8,7 @@ import { ContentCategory } from '@/types'
 import { markdownToHtml } from '@/lib/markdown'
 import { useSession } from 'next-auth/react'
 import { useToast } from '@/components/ui/Toast'
+import Image from 'next/image'
 
 export default function SubmitPage() {
   const { address, isConnected } = useAccount()
@@ -280,15 +281,45 @@ export default function SubmitPage() {
 
             {/* 封面图 */}
             <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">封面图URL（可选）</label>
-              <input
-                type="url"
-                name="imageUrl"
-                value={formData.imageUrl}
-                onChange={handleChange}
-                placeholder="https://example.com/image.jpg"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
+              <label className="block text-sm font-medium mb-2">封面图（可选）</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="url"
+                  name="imageUrl"
+                  value={formData.imageUrl}
+                  onChange={handleChange}
+                  placeholder="粘贴图片URL或从文件上传"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <label className="px-4 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 whitespace-nowrap">
+                  <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setUploadingImage(true)
+                    try {
+                      const compressedFile = await compressImage(file)
+                      const form = new FormData()
+                      form.append('file', compressedFile)
+                      const res = await fetch('/api/content/image', { method: 'POST', body: form })
+                      const j = await res.json()
+                      if (!j.success) {
+                        show(j.error || '封面上传失败', { type: 'error' })
+                        return
+                      }
+                      setFormData(prev => ({ ...prev, imageUrl: j.url }))
+                      show('封面上传成功', { type: 'success' })
+                    } finally {
+                      setUploadingImage(false)
+                    }
+                  }} />
+                  {uploadingImage ? '上传中...' : '上传文件'}
+                </label>
+              </div>
+              {formData.imageUrl && (
+                <div className="mt-4 relative w-full h-48 rounded-lg border overflow-hidden">
+                  <Image src={formData.imageUrl} alt="封面预览" fill unoptimized className="object-cover" />
+                </div>
+              )}
             </div>
 
             {/* 视频链接 */}

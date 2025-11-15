@@ -90,6 +90,7 @@ CREATE TABLE published_content (
   content TEXT NOT NULL,
   category TEXT NOT NULL CHECK (category IN ('article','video','activity','ambassador')),
   article_category TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   published_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   views INT DEFAULT 0,

@@ -1,50 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { supabaseAdmin } from '@/lib/db'
+import { db as dbEnv } from '@/lib/env'
 
-// Upload images for article content; returns public URL
 export async function POST(req: NextRequest) {
+  const session = await auth()
+  const uid = (session as any)?.uid
+
+  if (!uid) {
+    return NextResponse.json({ error: '未登录' }, { status: 401 })
+  }
+
   try {
-    const session = await auth()
-    const s = session as any
-    if (!s?.uid) return NextResponse.json({ error: '未登录' }, { status: 401 })
-
-    const contentType = req.headers.get('content-type') || ''
-    if (!contentType.includes('multipart/form-data')) {
-      return NextResponse.json({ error: 'Content-Type 必须为 multipart/form-data' }, { status: 400 })
-    }
-
     const form = await req.formData()
     const file = form.get('file') as File | null
-    if (!file) return NextResponse.json({ error: '缺少文件' }, { status: 400 })
 
-    // Validate type & size
-    const allowed = (process.env.IMAGE_ALLOWED_TYPES || 'image/jpeg,image/png,image/webp')
-      .split(',').map(t => t.trim()).filter(Boolean)
-    const maxMB = parseInt(process.env.CONTENT_IMAGE_MAX_MB || '5', 10)
-    if (!allowed.includes(file.type)) {
-      return NextResponse.json({ error: `不支持的图片类型: ${file.type}` }, { status: 400 })
-    }
-    if (file.size > maxMB * 1024 * 1024) {
-      return NextResponse.json({ error: `图片过大，最大支持 ${maxMB}MB` }, { status: 413 })
+    if (!file) {
+      return NextResponse.json({ error: '缺少文件' }, { status: 400 })
     }
 
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'avatars'
-    const filename = `content_${s.uid}_${Date.now()}_${(file as any).name || 'image'}`
+    // 验证文件类型和大小
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: '只允许上传图片文件' }, { status: 400 })
+    }
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+      return NextResponse.json({ error: '文件大小不能超过 5MB' }, { status: 400 })
+    }
 
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+    const key = `article-covers/${uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+    const bucket = dbEnv.storageBucket || 'default-bucket'
 
-    const { data: up, error: upErr } = await (supabaseAdmin as any).storage
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from(bucket)
-      .upload(filename, buffer, { contentType: file.type || 'image/png', upsert: true })
-    if (upErr) return NextResponse.json({ error: `上传失败: ${upErr.message}` }, { status: 500 })
+      .upload(key, buffer, {
+        contentType: file.type,
+        upsert: false,
+      })
 
-    const base = process.env.NEXT_PUBLIC_APP_URL || ''
-    const proxyUrl = `${base.replace(/\/$/, '')}/api/storage/file?path=${encodeURIComponent(up.path)}`
+    if (uploadError) {
+      console.error('Supabase upload error:', uploadError)
+      return NextResponse.json({ error: '上传到存储失败' }, { status: 500 })
+    }
 
-    return NextResponse.json({ success: true, url: proxyUrl, path: up.path })
-  } catch (e) {
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 })
+    const { data: publicUrlData } = supabaseAdmin.storage
+      .from(bucket)
+      .getPublicUrl(uploadData.path)
+
+    return NextResponse.json({ success: true, url: publicUrlData.publicUrl })
+
+  } catch (e: any) {
+    console.error('Image upload error:', e)
+    return NextResponse.json({ error: '服务器错误', detail: e.message }, { status: 500 })
   }
 }
