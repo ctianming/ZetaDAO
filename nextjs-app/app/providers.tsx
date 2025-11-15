@@ -4,33 +4,44 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { ToastProvider } from '@/components/ui/Toast'
 import { getWagmiConfig } from '@/lib/wagmi-config'
 
-export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient({
+// Wagmi and React Query require a singleton instance of the config and client.
+// However, during server-side rendering (SSR), it's crucial to create a new instance 
+// for each request to prevent data leakage between users. This setup ensures that.
+const config = getWagmiConfig();
+
+function makeQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
-        // 防止在生产环境中过度重试
         retry: 2,
         retryDelay: 1000,
-        // 禁用服务器端查询
         refetchOnWindowFocus: false,
         staleTime: 60 * 1000,
       },
     },
-  }))
-  
-  const [mounted, setMounted] = useState(false)
-  // 立即初始化配置（包括服务器端），避免构建时错误
-  const [config] = useState(() => getWagmiConfig())
+  });
+}
 
-  useEffect(() => {
-    setMounted(true)
-    console.log('[Providers] 组件已挂载')
-  }, [])
+let browserQueryClient: QueryClient | undefined = undefined;
+
+function getQueryClient() {
+  if (typeof window === 'undefined') {
+    // Server: always make a new query client
+    return makeQueryClient();
+  } else {
+    // Browser: use singleton pattern
+    if (!browserQueryClient) browserQueryClient = makeQueryClient();
+    return browserQueryClient;
+  }
+}
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  const queryClient = getQueryClient();
 
   return (
     <WagmiProvider config={config}>
