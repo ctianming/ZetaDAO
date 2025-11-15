@@ -7,6 +7,22 @@ import { supabaseAdmin } from '@/lib/db'
 import { auth as authConfig } from '@/lib/env'
 import bcrypt from 'bcryptjs'
 
+// Validate critical auth environment variables
+if (!authConfig.secret || authConfig.secret === 'dev-secret') {
+  console.error('❌ [NextAuth] NEXTAUTH_SECRET is not set or using default value!')
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('NEXTAUTH_SECRET must be set in production')
+  }
+}
+
+if (!authConfig.googleClientId || !authConfig.googleClientSecret) {
+  console.warn('⚠️  [NextAuth] Google OAuth credentials not configured. Google sign-in will be disabled.')
+}
+
+if (!authConfig.githubClientId || !authConfig.githubClientSecret) {
+  console.warn('⚠️  [NextAuth] GitHub OAuth credentials not configured. GitHub sign-in will be disabled.')
+}
+
 // Helper: find or create user & identity
 async function findOrCreateUserIdentity(provider: string, accountId: string, profile?: any) {
   if (!accountId) return null
@@ -38,24 +54,38 @@ async function findOrCreateUserIdentity(provider: string, accountId: string, pro
   return newUser.uid
 }
 
-export const nextAuthConfig: NextAuthConfig = {
-  session: { strategy: 'jwt' },
-  pages: {
-    error: '/auth/error',
-    signIn: '/auth/error',
-  },
-  providers: [
+// Build providers array dynamically based on available credentials
+const providers: any[] = []
+
+// Add Google provider only if credentials are configured
+if (authConfig.googleClientId && authConfig.googleClientSecret) {
+  providers.push(
     Google({
       clientId: authConfig.googleClientId,
       clientSecret: authConfig.googleClientSecret,
       allowDangerousEmailAccountLinking: true,
-    }),
+    })
+  )
+} else {
+  console.log('ℹ️  [NextAuth] Skipping Google provider (credentials not configured)')
+}
+
+// Add GitHub provider only if credentials are configured
+if (authConfig.githubClientId && authConfig.githubClientSecret) {
+  providers.push(
     GitHub({
       clientId: authConfig.githubClientId,
       clientSecret: authConfig.githubClientSecret,
       allowDangerousEmailAccountLinking: true,
-    }),
-    Credentials({
+    })
+  )
+} else {
+  console.log('ℹ️  [NextAuth] Skipping GitHub provider (credentials not configured)')
+}
+
+// Always add Credentials provider (password-based auth)
+providers.push(
+  Credentials({
       id: 'password',
       name: 'password',
       credentials: {
@@ -92,8 +122,16 @@ export const nextAuthConfig: NextAuthConfig = {
         if (!uid) return null
         return { id: uid as string, name: user.username || user.email, email: user.email }
       },
-    }),
-  ],
+    })
+)
+
+export const nextAuthConfig: NextAuthConfig = {
+  session: { strategy: 'jwt' },
+  pages: {
+    error: '/auth/error',
+    signIn: '/auth/error',
+  },
+  providers,
   callbacks: {
     async jwt({ token, user, account, profile }) {
       // If provider OAuth (google/github), handle identity

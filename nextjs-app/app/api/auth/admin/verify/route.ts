@@ -88,9 +88,12 @@ export async function POST(req: NextRequest) {
     }
     
     // Strict nonce validation: must match exactly and be in the expected format
-    const expectedMessage = `Admin access to ZetaDAO\n\nNonce: ${nonceData.nonce}\nTimestamp: ${nonceData.timestamp}\nExpires: ${new Date(nonceData.expiresAt).toISOString()}`
+    const expectedMessage = `Admin access to ZetaDAO\n\nNonce: ${nonceData.nonce}\nTimestamp: ${nonceData.timestamp}\nExpires: ${nonceData.expiresAt}`
+
     if (message !== expectedMessage) {
       logAdminAuth(lower, false, 'Message format mismatch', clientIp)
+      // For debugging, log the difference
+      console.error('Message Mismatch:', { expected: expectedMessage, received: message });
       return NextResponse.json({ success: false, error: 'Message format mismatch' }, { status: 400 })
     }
     
