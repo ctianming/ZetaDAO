@@ -16,9 +16,13 @@ export async function GET(request: NextRequest) {
     if (error) throw error
   invalidate({ paths: ['/articles'] })
   return NextResponse.json({ success: true, data })
-  } catch (error) {
+  } catch (error: any) {
     console.error('List categories error:', error)
-    return NextResponse.json({ error: '获取分类失败' }, { status: 500 })
+    const isNetworkError = error.message?.includes('fetch failed')
+    const userMessage = isNetworkError
+      ? '无法连接到数据库，请检查服务器网络配置或稍后重试。'
+      : '获取分类列表失败'
+    return NextResponse.json({ error: userMessage, details: error.message }, { status: 500 })
   }
 }
 

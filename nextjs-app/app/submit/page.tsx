@@ -73,16 +73,27 @@ export default function SubmitPage() {
     }
   }
   useEffect(() => {
-    // fetch available article categories
     const fetchCategories = async () => {
       try {
-        const res = await fetch('/api/categories', { cache: 'no-store' })
-        const json = await res.json()
-        if (json?.data) setCategories(json.data)
-      } catch {}
-    }
-    fetchCategories()
-  }, [])
+        const res = await fetch('/api/categories', { cache: 'no-store' });
+        if (!res.ok) {
+          console.error('Failed to fetch categories, status:', res.status);
+          show('无法加载文章分类，请稍后重试', { type: 'error' });
+          return;
+        }
+        const json = await res.json();
+        if (json?.data) {
+          setCategories(json.data);
+        } else {
+          console.warn('Categories data is missing in the response');
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        show('加载文章分类时出错', { type: 'error' });
+      }
+    };
+    fetchCategories();
+  }, [show]);
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData(prev => ({
       ...prev,
