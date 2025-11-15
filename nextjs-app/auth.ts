@@ -178,6 +178,12 @@ providers.push(
     })
 )
 
+// 在生产环境中明确设置 AUTH_URL 环境变量
+if (process.env.NODE_ENV === 'production' && !process.env.AUTH_URL && !process.env.NEXTAUTH_URL) {
+  process.env.AUTH_URL = authConfig.url
+  console.log('[Auth] Setting AUTH_URL from config:', authConfig.url)
+}
+
 export const nextAuthConfig: NextAuthConfig = {
   trustHost: true, // 快速修复 UntrustedHost 错误，生产环境建议使用环境变量
   basePath: '/api/auth',
