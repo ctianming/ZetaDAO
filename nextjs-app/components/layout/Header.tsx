@@ -202,6 +202,7 @@ export default function Header() {
   }, [])
 
   const ready = mounted
+  const buildId = process.env.NEXT_PUBLIC_BUILD_ID || 'unknown'
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -211,9 +212,14 @@ export default function Header() {
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-lg">
             Z
           </div>
-          <span className="hidden font-bold sm:inline-block gradient-text text-xl">
-            ZetaDAO
-          </span>
+          <div className="flex flex-col">
+            <span className="hidden font-bold sm:inline-block gradient-text text-xl">
+              ZetaDAO
+            </span>
+            <span className="hidden sm:inline-block text-[9px] text-gray-400 font-mono -mt-1" title={`构建版本: ${buildId}`}>
+              v{buildId.slice(-8)}
+            </span>
+          </div>
         </Link>
 
         {/* Desktop Navigation */}
