@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const key = `article-covers/${uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const bucket = dbEnv.storageBucket || 'default-bucket'
 
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from(bucket)
       .upload(key, buffer, {
         contentType: file.type,
@@ -44,11 +44,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '上传到存储失败' }, { status: 500 })
     }
 
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from(bucket)
-      .getPublicUrl(uploadData.path)
+    // Return a proxy URL for private bucket access via signed URL
+    // This ensures images can be loaded regardless of bucket privacy settings
+    // Use absolute URL to pass browser URL validation (type="url" inputs require absolute URLs)
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                    (req.headers.get('x-forwarded-proto') ? 
+                      `${req.headers.get('x-forwarded-proto')}://${req.headers.get('host')}` : 
+                      `http://${req.headers.get('host')}`)
+    const proxyUrl = `${baseUrl}/api/storage/file?path=${encodeURIComponent(key)}`
 
-    return NextResponse.json({ success: true, url: publicUrlData.publicUrl })
+    return NextResponse.json({ success: true, url: proxyUrl, path: key })
 
   } catch (e: any) {
     console.error('Image upload error:', e)

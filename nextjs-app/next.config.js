@@ -33,6 +33,8 @@ const nextConfig = {
         hostname: 'images.unsplash.com',
       },
     ],
+    // Note: Relative URLs like /api/storage/file?path=... don't need to be whitelisted
+    // as they are served from the same origin
   },
   env: {
     NEXT_PUBLIC_APP_NAME: 'ZetaDAO Community Portal',

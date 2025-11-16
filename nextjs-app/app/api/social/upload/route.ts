@@ -23,8 +23,13 @@ export async function POST(req: NextRequest) {
     })
     if (error) return NextResponse.json({ error: '上传失败' }, { status: 500 })
 
-    // return a public signed path resolver
-    const publicUrl = `/api/storage/file?path=${encodeURIComponent(key)}`
+    // Return a proxy URL for private bucket access via signed URL
+    // Use absolute URL to ensure compatibility with all contexts
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                    (req.headers.get('x-forwarded-proto') ? 
+                      `${req.headers.get('x-forwarded-proto')}://${req.headers.get('host')}` : 
+                      `http://${req.headers.get('host')}`)
+    const publicUrl = `${baseUrl}/api/storage/file?path=${encodeURIComponent(key)}`
     return NextResponse.json({ success: true, url: publicUrl, path: key })
   } catch (e) {
     return NextResponse.json({ error: '上传失败' }, { status: 500 })

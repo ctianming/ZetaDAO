@@ -45,7 +45,12 @@ export async function POST(req: NextRequest) {
     if (upErr) return NextResponse.json({ error: `上传失败: ${upErr.message}` }, { status: 500 })
 
   // Build proxy URL for private bucket access via signed URL
-  const proxyUrl = `/api/storage/file?path=${encodeURIComponent(key)}`
+  // Use absolute URL to ensure compatibility with all contexts
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                  (req.headers.get('x-forwarded-proto') ? 
+                    `${req.headers.get('x-forwarded-proto')}://${req.headers.get('host')}` : 
+                    `http://${req.headers.get('host')}`)
+  const proxyUrl = `${baseUrl}/api/storage/file?path=${encodeURIComponent(key)}`
 
     // Save to users.avatar_url
     const { error: updErr } = await supabaseAdmin

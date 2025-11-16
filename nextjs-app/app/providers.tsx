@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider, type Config } from 'wagmi'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { ToastProvider } from '@/components/ui/Toast'
 import { getWagmiConfig } from '@/lib/wagmi-config'
@@ -35,27 +35,28 @@ function getQueryClient() {
   }
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+// Inner component that contains all the providers
+function ProvidersInner({ children }: { children: ReactNode }) {
   const queryClient = getQueryClient();
-  
-  // State to hold the client-side Wagmi config and track mount status
   const [config, setConfig] = useState<Config | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Wagmi config must be created on the client side to ensure access to window object.
+    // Wagmi config must be created on the client side
     setConfig(getWagmiConfig());
-    setMounted(true);
   }, []);
 
-  // CRITICAL FIX: Do not render children until the component is mounted on the client
-  // and the Wagmi config is ready. This prevents hydration mismatches and ensures that
-  // all child components (like Header) can safely use wagmi and RainbowKit hooks.
-  if (!mounted || !config) {
-    return null;
+  // Wait for config to be ready before rendering providers
+  if (!config) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mb-4"></div>
+          <p className="text-gray-600">正在初始化...</p>
+        </div>
+      </div>
+    );
   }
 
-  // Once mounted on the client, render the full provider tree with children.
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
@@ -68,5 +69,29 @@ export function Providers({ children }: { children: React.ReactNode }) {
         </SessionProvider>
       </QueryClientProvider>
     </WagmiProvider>
-  )
+  );
+}
+
+// Outer component that only renders on the client
+export function Providers({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // CRITICAL FIX: Completely skip rendering during SSR to avoid hydration mismatches.
+  // This ensures that all Web3-related providers and hooks are only initialized on the client.
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mb-4"></div>
+          <p className="text-gray-600">正在初始化...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ProvidersInner>{children}</ProvidersInner>;
 }

@@ -1,11 +1,9 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import Link from 'next/link'
-import dynamicImport from 'next/dynamic'
+import dynamic from 'next/dynamic'
 
-const Header = dynamicImport(() => import('@/components/layout/Header'), { ssr: false })
+const Header = dynamic(() => import('@/components/layout/Header'), { ssr: false })
 
 export default function NotFound() {
   return (
