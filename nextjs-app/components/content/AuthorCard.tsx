@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import FollowButton from '@/components/social/FollowButton'
 import { supabase } from '@/lib/db'
-import UserAvatar from '@/components/common/UserAvatar'
 
 export default async function AuthorCard({ uid }: { uid: string }) {
   try {
@@ -20,7 +19,6 @@ export default async function AuthorCard({ uid }: { uid: string }) {
     return (
       <div className="flex items-center justify-between rounded-2xl border p-4 bg-white">
         <div className="flex items-center gap-3">
-          <UserAvatar url={user?.avatar_url || null} name={name} size={48} />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Link href={`/u/${uid}`} className="font-semibold hover:underline truncate max-w-[200px]">{name}</Link>

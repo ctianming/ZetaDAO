@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import FollowButton from '@/components/social/FollowButton'
-import UserAvatar from '@/components/common/UserAvatar'
+
 
 export default function AuthorInline({ uid, name, xp, avatarUrl }: { uid: string; name: string; xp?: number; avatarUrl?: string | null }) {
   const [open, setOpen] = useState(false)
@@ -20,13 +20,11 @@ export default function AuthorInline({ uid, name, xp, avatarUrl }: { uid: string
     <div className="relative inline-flex items-center" ref={ref}
       onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <Link href={`/u/${uid}`} className="inline-flex items-center gap-2 group">
-        <UserAvatar url={avatarUrl} name={name} size={28} />
         <span className="text-sm text-gray-700 group-hover:underline">{name || '用户'}</span>
       </Link>
       {open && (
         <div className="absolute left-0 top-[120%] z-20 w-72 rounded-2xl border bg-white shadow-xl p-4">
           <div className="flex items-center gap-3">
-            <UserAvatar url={avatarUrl} name={name} size={40} />
             <div className="min-w-0">
               <div className="font-semibold truncate max-w-[140px]">{name || '用户'}</div>
               <div className="text-xs text-gray-500">XP {xp ?? 0}</div>

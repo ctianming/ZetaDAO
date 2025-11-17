@@ -248,26 +248,7 @@ export const nextAuthConfig: NextAuthConfig = {
             .eq('uid', token.uid)
             .single()
           
-          // Ensure session.user exists
-          if (!session.user) (session as any).user = { name: undefined, email: undefined, image: undefined }
-          if (data) {
-            if (!session.user) {
-              session.user = { id: token.uid as string, name: undefined, email: undefined, image: null };
-            }
-            if (data.username) {
-              session.user.name = data.username;
-            }
-            if (data.avatar_url) {
-              (session as any).avatarUrl = data.avatar_url;
-              session.user.image = data.avatar_url;
-            }
-            if (data.bio) {
-              (session as any).bio = data.bio;
-            }
-            if (typeof data.xp_total === 'number') {
-              (session as any).xpTotal = data.xp_total;
-            }
-          }
+          
         } catch (err) {
           console.error('[Auth] Failed to hydrate user profile:', err)
         }
@@ -280,5 +261,6 @@ export const nextAuthConfig: NextAuthConfig = {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth(nextAuthConfig)
+
 
 

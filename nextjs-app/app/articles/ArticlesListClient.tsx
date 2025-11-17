@@ -19,7 +19,34 @@ export default function ArticlesListClient({ initialParams }: { initialParams: {
     queryFn: () => fetch(url).then(r => r.json()),
     ...queryConfig
   })
-  const articles = (data?.data || []) as any[]
+  const hackathonArticle = {
+    id: 'zetachain-hackathon',
+    title: 'ZetaChain × 阿里云「通用 AI」共学黑客松正式启动！',
+    content: 'ZetaChain 与阿里云共同发起「通用 AI」共学黑客松：一场融合 AI 与通用区块链创新的共学与开发计划...',
+    publishedAt: '2024-05-20T10:00:00Z',
+    authorName: 'zetachain-CN',
+    authorUid: 'zetachain-cn',
+    authorAvatarUrl: null,
+    views: 1500,
+    likes: 300,
+    metadata: {
+      imageUrl: '/images/ZetaChain_x_Alibaba_Cloud_-_Chinese.webp',
+      tags: ['ZetaChain', 'Hackathon', 'AI'],
+    },
+  };
+
+  const articles = useMemo(() => {
+    const fetchedArticles = (data?.data || []) as any[];
+    // Only show the hardcoded article on the main, unfiltered page
+    if (!initialParams.articleCategory && !initialParams.tag && !initialParams.q) {
+      // Prevent duplicates if the article is ever added to the backend
+      const isHackathonArticleFetched = fetchedArticles.some(a => a.id === hackathonArticle.id);
+      if (!isHackathonArticleFetched) {
+        return [hackathonArticle, ...fetchedArticles];
+      }
+    }
+    return fetchedArticles;
+  }, [data, initialParams, hackathonArticle]);
 
   if (isLoading) {
     return <div className="text-center py-20"><p className="text-muted-foreground text-lg">加载中...</p></div>

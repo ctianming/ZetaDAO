@@ -5,7 +5,6 @@ import Image from 'next/image'
 import { PublishedContent } from '@/types'
 import { formatRelativeTime, truncateAddress } from '@/lib/utils'
 import { Eye, Heart } from 'lucide-react'
-import UserAvatar from '@/components/common/UserAvatar'
 
 interface ArticleCardProps {
   article: PublishedContent
@@ -40,9 +39,6 @@ export default function ArticleCard({ article }: ArticleCardProps) {
           
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-4 text-muted-foreground">
-              {article.authorUid && (
-                <UserAvatar url={(article as any).authorAvatarUrl} name={article.authorName || article.authorWallet || ''} size={24} />
-              )}
               {article.authorName && (
                 <span>{article.authorName}</span>
               )}
