@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import UserAvatar from '@/components/common/UserAvatar'
 import { getZetaChainConfig } from '@/lib/web3'
 import { useToast } from '@/components/ui/Toast'
+import { useUserStore } from '@/stores/userStore'
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -111,7 +112,9 @@ export default function Header() {
   const avatarRef = useRef<HTMLDivElement | null>(null)
   const userName = session?.user?.name || session?.user?.email || '用户'
   const [socialStats, setSocialStats] = useState<{followers:number; following:number; posts?:number; isFollowing:boolean} | null>(null)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  
+  // 从全局 userStore 读取头像 URL，确保所有组件使用同一数据源
+  const avatarUrl = useUserStore((state) => state.image)
   // wallet connect/disconnect handlers (decoupled from auth)
   const connectWalletAndVerify = useCallback(async () => {
     try {
@@ -177,12 +180,7 @@ export default function Header() {
         const j = await res.json()
         if (j?.success) setSocialStats(j.data)
       } catch {}
-      try {
-        const ur = await fetch(`/api/user?uid=${uid}`, { cache: 'no-store' })
-        const uj = await ur.json()
-        const url = uj?.data?.user?.avatar_url as string | undefined
-        if (url) setAvatarUrl(url)
-      } catch {}
+      // 头像现在从 userStore 读取，不需要手动获取
     }
     load()
   }, [session])
@@ -193,11 +191,7 @@ export default function Header() {
       if (!avatarRef.current.contains(e.target as Node)) setAvatarOpen(false)
     }
     document.addEventListener('click', onDocClick)
-    const onAvatarUpdated = (e: any) => {
-      const url = e?.detail?.url as string | undefined
-      if (url) setAvatarUrl(url)
-    }
-    window.addEventListener('avatar-updated', onAvatarUpdated as any)
+    // 不再需要监听 avatar-updated 事件，因为 userStore 会自动更新
     return () => document.removeEventListener('click', onDocClick)
   }, [])
 
@@ -325,12 +319,12 @@ export default function Header() {
                 aria-haspopup="true"
                 aria-expanded={avatarOpen}
               >
-                <UserAvatar url={avatarUrl || (session as any)?.avatarUrl} name={userName} size={36} />
+                <UserAvatar url={avatarUrl} name={userName} size={36} />
               </button>
               {avatarOpen && (
                 <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border shadow-xl p-4 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-3 mb-4">
-                    <UserAvatar url={avatarUrl || (session as any)?.avatarUrl} name={userName} size={56} />
+                    <UserAvatar url={avatarUrl} name={userName} size={56} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold truncate">{userName}</div>
                       {/* decoupled: remove new wallet user hint */}

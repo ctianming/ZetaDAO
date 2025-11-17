@@ -10,7 +10,7 @@ marked.setOptions({
 export function markdownToHtml(md: string): string {
   const rawHtml = marked.parse(md || '') as string
   const clean = sanitizeHtml(rawHtml, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'span', 'code', 'pre', 'iframe']),
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'code', 'pre', 'iframe']),
     allowedAttributes: {
       a: ['href', 'name', 'target', 'rel'],
       img: ['src', 'alt', 'title', 'width', 'height'],

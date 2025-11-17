@@ -1,71 +1,64 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Wind } from 'lucide-react'
 
-interface Banner {
-  content: string;
-  link_url?: string | null;
-}
+const newsItems = [
+  {
+    text: 'ZetaChain 中文助推官计划正式上线',
+    href: 'https://x.com/ZetaChain_CH/status/1982774373531722088',
+  },
+  {
+    text: '手把手教你写下第一个通用智能合约',
+    href: 'https://x.com/ZetaChain_CH/status/1983890325790769280',
+  },
+  {
+    text: 'KaiaChain测试网现已集成 ZetaChain',
+    href: 'https://x.com/ZetaChain_CH/status/1963526510968762790',
+  },
+  {
+    text: '加入社区新大使见面会赢取ZETA好礼',
+    href: 'https://x.com/ZetaChain_CH/status/1963602055924449390',
+  },
+]
 
 export default function NewsTicker() {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [banners, setBanners] = useState<Banner[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Fetch active banners from API
-  useEffect(() => {
-    const fetchBanners = async () => {
-      try {
-        const response = await fetch('/api/banners')
-        const data = await response.json()
-        if (data.success && data.data && data.data.length > 0) {
-          setBanners(data.data)
-        }
-      } catch (error) {
-        console.error('Error fetching banners:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchBanners()
-  }, [])
+  const [isFading, setIsFading] = useState(false)
 
   useEffect(() => {
-    if (banners.length === 0) return
-
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % banners.length)
-    }, 5000)
+      setIsFading(true)
+      setTimeout(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % newsItems.length)
+        setIsFading(false)
+      }, 500) // CSS transition duration
+    }, 4000) // Change item every 4 seconds
 
     return () => clearInterval(interval)
-  }, [banners.length])
+  }, [])
 
-  if (loading || banners.length === 0) {
-    return null;
-  }
+  const currentItem = newsItems[currentIndex]
 
   return (
-    <div className="w-full bg-primary-500 text-white py-2 overflow-hidden">
-      <div className="container mx-auto px-4 flex items-center gap-4">
-        <span className="font-semibold whitespace-nowrap">📢 最新动态</span>
-        <div className="flex-1 overflow-hidden">
-          <div
-            className="transition-transform duration-500 ease-in-out"
-            style={{ transform: `translateY(-${currentIndex * 100}%)` }}
+    <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="container mx-auto px-4 h-12 flex items-center">
+        <div className="flex items-center gap-3 flex-shrink-0 mr-4">
+          <Wind className="w-5 h-5 text-primary-500" />
+          <span className="font-semibold text-sm">最新动态</span>
+        </div>
+        <div className="flex-1 overflow-hidden h-full relative">
+          <a
+            key={currentIndex} // Use key to force re-render on change
+            href={currentItem.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`absolute inset-0 flex items-center text-sm text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-500 ease-in-out ${
+              isFading ? 'opacity-0 transform -translate-y-full' : 'opacity-100 transform translate-y-0'
+            }`}
           >
-            {banners.map((banner, index) => (
-              <div key={index} className="h-6 flex items-center truncate">
-                {banner.link_url ? (
-                  <a href={banner.link_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                    {banner.content}
-                  </a>
-                ) : (
-                  <span>{banner.content}</span>
-                )}
-              </div>
-            ))}
-          </div>
+            {currentItem.text}
+          </a>
         </div>
       </div>
     </div>

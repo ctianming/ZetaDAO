@@ -8,6 +8,7 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { SessionProvider } from 'next-auth/react'
 import { ToastProvider } from '@/components/ui/Toast'
 import { getWagmiConfig } from '@/lib/wagmi-config'
+import { SessionSyncProvider } from '@/components/providers/SessionSyncProvider'
 
 // This setup ensures that the QueryClient is created only once per request on the server
 // and as a singleton on the client, preventing data leakage between users during SSR.
@@ -61,11 +62,13 @@ function ProvidersInner({ children }: { children: ReactNode }) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <SessionProvider>
-          <RainbowKitProvider>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </RainbowKitProvider>
+          <SessionSyncProvider>
+            <RainbowKitProvider>
+              <ToastProvider>
+                {children}
+              </ToastProvider>
+            </RainbowKitProvider>
+          </SessionSyncProvider>
         </SessionProvider>
       </QueryClientProvider>
     </WagmiProvider>

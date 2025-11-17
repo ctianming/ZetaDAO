@@ -6,29 +6,19 @@ import Header from '@/components/layout/Header'
 import { useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useEnsureAdminSession } from '@/components/admin/useEnsureAdminSession'
 
 export default function AdminPage() {
   const { isConnected, status } = useAccount()
   const { openConnectModal } = useConnectModal()
-  const { isAdmin, loading, error, refresh } = useEnsureAdminSession()
+  const { isAdmin, loading, error, refresh, needsConnection } = useEnsureAdminSession()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
-  const autoPromptRef = useRef(false)
   useEffect(() => { setMounted(true) }, [])
 
-  // Auto-open connect modal when entering /admin if not connected (only once)
-  useEffect(() => {
-    if (!mounted) return
-    if (!isConnected && !autoPromptRef.current) {
-      autoPromptRef.current = true
-      if (openConnectModal) openConnectModal()
-    }
-  }, [mounted, isConnected, openConnectModal])
-
   // 当用户连接后，自动尝试管理员认证；若断开则提示连接
-  const showConnectHint = !isConnected || status !== 'connected'
+  const showConnectHint = needsConnection || !isConnected || status !== 'connected'
 
   if (!mounted) return null
 

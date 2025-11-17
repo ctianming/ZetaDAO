@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
@@ -42,6 +42,7 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^22.7.5",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.11",

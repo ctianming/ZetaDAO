@@ -3,6 +3,8 @@
 import NextImage from 'next/image'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import { useSession } from 'next-auth/react'
+import { useUserStore } from '@/stores/userStore'
 
 type Props = {
   avatarUrl?: string | null
@@ -38,6 +40,10 @@ export default function AvatarEditor({ avatarUrl, username, isSelf, size = 64, c
   const firstFocusableRef = useRef<HTMLInputElement | null>(null)
   const [animIn, setAnimIn] = useState(false)
   const [centerPending, setCenterPending] = useState(false)
+  
+  // 用于更新会话和全局状态
+  const { update } = useSession()
+  const setAvatar = useUserStore((state) => state.setAvatar)
 
   const displayUrl = useMemo(() => {
     return currentUrl || (process.env.NEXT_PUBLIC_DEFAULT_AVATAR_URL || '') || ''
@@ -119,11 +125,25 @@ export default function AvatarEditor({ avatarUrl, username, isSelf, size = 64, c
       }
       const bust = `${j.url}${j.url.includes('?') ? '&' : '?'}t=${Date.now()}`
       setCurrentUrl(bust)
+      
+      // 立即更新全局 userStore 中的头像
+      setAvatar(bust)
+      
+      // 触发 next-auth 会话更新，这会重新从服务器获取最新的用户信息
+      // 并通过 SessionSyncProvider 自动同步到 userStore
+      try {
+        await update()
+      } catch (e) {
+        console.error('Failed to update session:', e)
+      }
+      
       closeModal()
       setFile(null)
       setPreview(null)
       setImgEl(null)
       onUpdated?.(bust)
+      
+      // 保留自定义事件以兼容可能依赖它的旧代码
       try { window.dispatchEvent(new CustomEvent('avatar-updated', { detail: { url: bust } })) } catch {}
     } catch (e) {
       show('上传失败', { type: 'error' })
