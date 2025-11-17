@@ -16,16 +16,19 @@ export default function ArticleCard({ article }: ArticleCardProps) {
       href={`/articles/${article.id}`}
       className="block bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
     >
-      <div className="flex gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         {article.metadata?.imageUrl && (
-          <Image
-            src={article.metadata.imageUrl}
-            alt={article.title}
-            width={192}
-            height={128}
-            unoptimized
-            className="object-cover rounded-xl w-48 h-32"
-          />
+          <div className="w-full md:w-48 flex-shrink-0">
+            <div className="relative w-full aspect-[16/9] md:h-32">
+              <Image
+                src={article.metadata.imageUrl}
+                alt={article.title}
+                fill
+                unoptimized
+                className="object-cover rounded-xl"
+              />
+            </div>
+          </div>
         )}
         
         <div className="flex-1">
